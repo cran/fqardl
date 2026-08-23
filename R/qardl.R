@@ -108,7 +108,13 @@ build_ardl_design <- function(y, X, fourier, p, q) {
   n_eff <- n - max_lag
   
   # Dependent variable (adjusted)
-  y_adj <- y[(max_lag + 1):n]
+  # CORRECTED in 1.0.3: the dependent variable of a PSS conditional error
+  # correction model is Delta y, not y. Up to 1.0.2 the right-hand side was
+  # the ECM design while the left-hand side was in levels, so the reported
+  # coefficient on y_lag1 was 1 + rho instead of rho: positive, near unity,
+  # with a large positive t-ratio at every quantile, and the long-run
+  # multipliers -theta/phi carried the wrong sign.
+  y_adj <- y[(max_lag + 1):n] - y[max_lag:(n - 1)]
   
   # Initialize design matrix list
   design_list <- list()
@@ -215,11 +221,18 @@ estimate_qardl <- function(y, X, fourier, p, q, tau, case = 3) {
   names(coefs) <- colnames(design$X)
   
   # Standard errors (using sandwich estimator)
-  qr_summary <- summary(qr_model, se = "boot", R = 200)
+  qr_summary <- summary(qr_model, se = "boot", R = 200, covariance = TRUE)
   se <- qr_summary$coefficients[, 2]
+  names(se) <- colnames(design$X)   # FIXED in 1.0.3: in 1.0.2 only `coefs` was
+                                    # renamed, so se["y_lag1"] silently returned NA
+  # NEW in 1.0.3: retained so that perform_bounds_test() can form a genuine
+  # Wald statistic instead of an average of squared marginal t-ratios.
+  V <- tryCatch(qr_summary$cov, error = function(e) NULL)
+  if (!is.null(V)) dimnames(V) <- list(colnames(design$X), colnames(design$X))
   
   # t-statistics
   t_stats <- coefs / se
+  names(t_stats) <- colnames(design$X)
   
   # p-values
   p_values <- 2 * (1 - pnorm(abs(t_stats)))
@@ -238,6 +251,7 @@ estimate_qardl <- function(y, X, fourier, p, q, tau, case = 3) {
   return(list(
     tau = tau,
     coefficients = coefs,
+    vcov = V,
     std_errors = se,
     t_statistics = t_stats,
     p_values = p_values,

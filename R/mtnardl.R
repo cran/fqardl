@@ -358,7 +358,13 @@ estimate_mtnardl <- function(y, X, p, q, case) {
   }
   
   # Dependent variable
-  y_adj <- y[(max_lag+1):n]
+  # CORRECTED in 1.0.3: the dependent variable of a PSS conditional error
+  # correction model is Delta y, not y. Up to 1.0.2 the right-hand side was
+  # the ECM design while the left-hand side was in levels, so the reported
+  # coefficient on y_lag1 was 1 + rho instead of rho: positive, near unity,
+  # with a large positive t-ratio at every quantile, and the long-run
+  # multipliers -theta/phi carried the wrong sign.
+  y_adj <- y[(max_lag+1):n] - y[max_lag:(n - 1)]
   
   # Combine
   X_design <- do.call(cbind, design_list)
@@ -503,23 +509,19 @@ perform_mtnardl_bounds <- function(model_result, n, k, case) {
   level_names <- grep("_lag1$", names(coefs), value = TRUE)
   t_levels <- t_stats[level_names]
   
-  F_stat <- mean(t_levels^2, na.rm = TRUE)
-  
-  # Approximate critical values
-  cv_lower <- c(2.45, 2.86, 3.74)  # 10%, 5%, 1%
-  cv_upper <- c(3.52, 4.01, 5.06)
-  
-  if (F_stat > cv_upper[2]) {
-    decision <- "Cointegration exists"
-  } else if (F_stat < cv_lower[2]) {
-    decision <- "No cointegration"
-  } else {
-    decision <- "Inconclusive"
-  }
-  
+  # CORRECTED in 1.0.3: a genuine Wald statistic, not mean(t^2), and the
+  # critical values now come from the PSS table for the actual number of
+  # level terms rather than a hard-coded pair.
+  F_stat <- wald_bounds_F(coefs, model_result$vcov, level_names)
+  t_phi  <- unname(t_stats["y_lag1"])
+  cv <- get_pss_critical_values(max(1L, length(level_names) - 1L), case = 3)
+  decision <- bounds_verdict(F_stat, cv$F_lower[2], cv$F_upper[2])
+
   return(list(
-    F_stat = F_stat,
-    cv_5 = c(cv_lower[2], cv_upper[2]),
+    F_stat   = F_stat,
+    t_stat   = t_phi,          # was missing entirely in 1.0.2
+    cv_5     = c(cv$F_lower[2], cv$F_upper[2]),
+    t_cv_5   = c(cv$t_lower[2], cv$t_upper[2]),
     decision = decision
   ))
 }

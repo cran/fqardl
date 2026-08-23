@@ -1,3 +1,5 @@
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
 #' =============================================================================
 #' Fourier Quantile ARDL (FQARDL) - Main Functions
 #' Ported from Stata to R
@@ -72,6 +74,13 @@ fqardl <- function(formula, data,
     stop("'tau' must be between 0 and 1 (exclusive)")
   }
   
+  if (!identical(as.numeric(case), 3)) {
+    stop("Only case = 3 (unrestricted intercept, no trend) is supported.\n",
+         "  In fqardl <= 1.0.2 `case` was accepted but never used: the design\n",
+         "  matrix was always Case III while the critical values were switched.\n",
+         "  See NEWS.md for version 1.0.3.", call. = FALSE)
+  }
+
   if (!is.null(seed)) set.seed(seed)
   
   # Extract variables from formula
@@ -274,14 +283,21 @@ summary.fqardl <- function(object, ...) {
   cat("-----------------------------\n")
   cat(sprintf("F-statistic: %.4f\n", object$bounds_test$F_stat))
   cat(sprintf("t-statistic: %.4f\n", object$bounds_test$t_stat))
-  cat("\nCritical Values (Pesaran et al., 2001):\n")
-  cat(sprintf("  10%%: I(0) = %.3f, I(1) = %.3f\n", 
-              object$bounds_test$cv_10[1], object$bounds_test$cv_10[2]))
-  cat(sprintf("   5%%: I(0) = %.3f, I(1) = %.3f\n", 
+  cat("\nCritical Values (Pesaran, Shin and Smith 2001, Table CI(iii)):\n")
+  cat(sprintf("   5%%: I(0) = %.3f, I(1) = %.3f\n",
               object$bounds_test$cv_5[1], object$bounds_test$cv_5[2]))
-  cat(sprintf("   1%%: I(0) = %.3f, I(1) = %.3f\n", 
-              object$bounds_test$cv_1[1], object$bounds_test$cv_1[2]))
-  cat(sprintf("\nDecision: %s\n\n", object$bounds_test$decision))
+  cat("   1% and 10%: not supplied. Only the 5 percent column of the table has\n")
+  cat("   been verified against the source; see ?get_pss_critical_values.\n")
+  cat(sprintf("\nDecision: %s\n", object$bounds_test$decision))
+  cat(sprintf("(reported at tau = %.2f; restrictions = %d)\n",
+              object$bounds_test$reference_tau %||% NA_real_,
+              object$bounds_test$n_restrictions %||% NA_integer_))
+  if (!is.null(object$bounds_test$summary)) {
+    cat("\nBounds test by quantile:\n")
+    print(object$bounds_test$summary, row.names = FALSE)
+  }
+  cat("\nNote: the PSS critical values were simulated for the conditional mean.\n")
+  cat("Quantile-specific verdicts are descriptive; prefer the bootstrap.\n\n")
   
   # Bootstrap results if available
   if (!is.null(object$bootstrap)) {

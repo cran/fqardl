@@ -344,7 +344,13 @@ estimate_nardl <- function(y, X, fourier, p, q, case = 3) {
   }
   
   # Dependent variable (adjusted)
-  y_adj <- y[(max_lag + 1):n]
+  # CORRECTED in 1.0.3: the dependent variable of a PSS conditional error
+  # correction model is Delta y, not y. Up to 1.0.2 the right-hand side was
+  # the ECM design while the left-hand side was in levels, so the reported
+  # coefficient on y_lag1 was 1 + rho instead of rho: positive, near unity,
+  # with a large positive t-ratio at every quantile, and the long-run
+  # multipliers -theta/phi carried the wrong sign.
+  y_adj <- y[(max_lag + 1):n] - y[max_lag:(n - 1)]
   
   # Combine design matrix
   X_design <- do.call(cbind, design_list)
@@ -498,20 +504,17 @@ perform_nardl_bounds_test <- function(nardl_result, n, k, case) {
   level_names <- grep("_lag1$", names(coefs), value = TRUE)
   t_stats_levels <- t_stats[level_names]
   
-  F_stat <- mean(t_stats_levels^2, na.rm = TRUE)
-  t_phi <- t_stats["y_lag1"]
+  # CORRECTED in 1.0.3: a genuine Wald statistic, not mean(t^2).
+  V <- tryCatch(stats::vcov(nardl_result$model), error = function(e) NULL)
+  if (!is.null(V)) dimnames(V) <- list(names(coefs), names(coefs))
+  F_stat <- wald_bounds_F(coefs, V, level_names)
+  t_phi <- unname(t_stats["y_lag1"])
   
   # Get critical values
   cv <- get_pss_critical_values(length(level_names) - 1, case)
   
-  # Decision
-  if (F_stat > cv$F_upper[2]) {
-    decision <- "Cointegration exists"
-  } else if (F_stat < cv$F_lower[2]) {
-    decision <- "No cointegration"
-  } else {
-    decision <- "Inconclusive"
-  }
+  # Three-way verdict; the inconclusive region is part of the procedure.
+  decision <- bounds_verdict(F_stat, cv$F_lower[2], cv$F_upper[2])
   
   return(list(
     F_stat = F_stat,
