@@ -2,12 +2,7 @@
 % Please edit documentation in R/bounds_test.R
 \name{perform_bounds_test}
 \alias{perform_bounds_test}
-\title{=============================================================================
-Bounds Test for Cointegration
-Based on Pesaran, Shin & Smith (2001)
-With extensions for Quantile ARDL
-=============================================================================
-Perform Bounds Test for Cointegration}
+\title{Perform Bounds Test for Cointegration}
 \usage{
 perform_bounds_test(qardl_results, n, k, case = 3)
 }

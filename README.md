@@ -1,6 +1,6 @@
 # fqardl
 
-Fourier ARDL methods for R: Fourier Quantile ARDL, Fourier Nonlinear ARDL, Multi-Threshold NARDL, and Fourier unit root tests. Ported from the Stata modules of Dr Merwan Roudane.
+Fourier ARDL methods for R: Fourier Quantile ARDL, Fourier Nonlinear ARDL, Multi-Threshold NARDL, and Fourier unit root tests.
 
 CRAN: https://cran.r-project.org/package=fqardl
 

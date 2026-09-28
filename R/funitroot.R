@@ -1,9 +1,8 @@
-#' =============================================================================
-#' Fourier Unit Root Tests
-#' Based on Enders & Lee (2012) and Becker, Enders & Lee (2006)
-#' Ported from Python: Dr. Merwan Roudane
-#' R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
-#' =============================================================================
+# =============================================================================
+# Fourier Unit Root Tests
+# Based on Enders & Lee (2012) and Becker, Enders & Lee (2006)
+# R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
+# =============================================================================
 
 #' Fourier ADF Test
 #'

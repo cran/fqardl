@@ -19,7 +19,6 @@ Main functions:
 \author{
 Muhammad Alkhalaf \email{contact@rufyqelngeh.com}
 
-Contributor: Merwan Roudane (Original Stata/Python implementation)
 }
 \references{
 Shin, Y., Yu, B., & Greenwood-Nimmo, M. (2014). Modelling Asymmetric 

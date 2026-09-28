@@ -2,11 +2,7 @@
 % Please edit documentation in R/qardl.R
 \name{select_optimal_lags}
 \alias{select_optimal_lags}
-\title{=============================================================================
-Quantile ARDL Estimation Functions
-Based on Cho et al. (2015) and extensions
-=============================================================================
-Select Optimal Lag Structure}
+\title{Select Optimal Lag Structure}
 \usage{
 select_optimal_lags(
   y,

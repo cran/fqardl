@@ -1,14 +1,14 @@
-#' =============================================================================
-#' Bounds Test for Cointegration
-#' Pesaran, Shin & Smith (2001), Journal of Applied Econometrics 16(3), 289-326.
-#'
-#' CONTAINMENT RELEASE 1.0.3 -- this file was rewritten. See NEWS.md.
-#' In 1.0.2 the "F-statistic" was mean(t^2) over the terms matching `_lag1$`.
-#' That is an average of squared marginal t-ratios: it ignores the covariances
-#' among the level coefficients, it has no distribution theory, and it was being
-#' compared against tables simulated for a genuine Wald statistic. It has been
-#' replaced by the Wald form of PSS eq. (21).
-#' =============================================================================
+# =============================================================================
+# Bounds Test for Cointegration
+# Pesaran, Shin & Smith (2001), Journal of Applied Econometrics 16(3), 289-326.
+#
+# CONTAINMENT RELEASE 1.0.3 -- this file was rewritten. See NEWS.md.
+# In 1.0.2 the "F-statistic" was mean(t^2) over the terms matching `_lag1$`.
+# That is an average of squared marginal t-ratios: it ignores the covariances
+# among the level coefficients, it has no distribution theory, and it was being
+# compared against tables simulated for a genuine Wald statistic. It has been
+# replaced by the Wald form of PSS eq. (21).
+# =============================================================================
 
 #' Wald Bounds Test for Cointegration
 #'

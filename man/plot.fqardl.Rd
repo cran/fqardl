@@ -2,11 +2,7 @@
 % Please edit documentation in R/plots.R
 \name{plot.fqardl}
 \alias{plot.fqardl}
-\title{=============================================================================
-Visualization Functions for FQARDL
-Publication-ready plots
-=============================================================================
-Plot FQARDL Results}
+\title{Plot FQARDL Results}
 \usage{
 \method{plot}{fqardl}(
   x,

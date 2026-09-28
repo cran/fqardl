@@ -1,7 +1,7 @@
-#' =============================================================================
-#' Visualization Functions for FNARDL
-#' Dynamic Multiplier Plots and Asymmetry Analysis
-#' =============================================================================
+# =============================================================================
+# Visualization Functions for FNARDL
+# Dynamic Multiplier Plots and Asymmetry Analysis
+# =============================================================================
 
 #' Plot FNARDL Results
 #'

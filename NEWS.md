@@ -1,3 +1,87 @@
+# fqardl 1.0.5
+
+* Corrected the DOIs of Enders and Lee (2012) (10.1016/j.econlet.2012.04.081) and Becker, Enders and Lee (2006) (10.1111/j.1467-9892.2006.00478.x) in DESCRIPTION.
+* Six Rd files had their \title polluted by file-header banners written as roxygen comments; the banners are now plain comments and the titles are restored.
+* Removed a start-up message crediting a third party; Authors@R and README updated.
+* No changes to estimation code.
+
+# fqardl 1.0.4
+
+An adversarial audit of 1.0.3 was run before submitting it to CRAN: fifty-three
+checks that try to break the release rather than confirm it, including an
+external oracle that rebuilds the model from scratch with `quantreg`, a
+falsification test that re-introduces the old defect and requires the old symptom
+to return, an empirical size study under a no-cointegration null, and a sweep of
+thirty-six combinations of k, p and q. Two findings came out of it, one of them
+in my own repair.
+
+## Corrected
+
+### The 1 and 10 percent critical values in 1.0.3 had no traceable provenance
+
+Version 1.0.3 shipped a Case III table with 1, 5 and 10 percent points and stated
+in a comment that the 1 and 10 percent columns were "inherited from 1.0.2". The
+audit checked that claim and it was false: those entries match neither 1.0.2 nor
+anything I can tie to Pesaran, Shin and Smith. Only the 5 percent column was ever
+verified.
+
+Shipping plausible-looking numbers of unknown origin is exactly the fault this
+whole line of releases exists to correct, so the 1 and 10 percent F bounds are
+now returned as `NA`, as the 1 and 10 percent t bounds already were. The decision
+rule uses the 5 percent level only, and `get_pss_critical_values()` now returns a
+`verified` flag saying which entries are backed by the source. A test asserts it.
+
+### For the record: 1.0.2's own Case III table was wrong for every k >= 2
+
+The audit compared the shipped table against 1.0.2's. They agree at k = 1 and
+diverge everywhere else, and for k > 6 version 1.0.2 returned a single default
+row for every k:
+
+| k | 1.0.2, 5 percent | Table CI(iii), 5 percent |
+|---|---|---|
+| 1 | 4.94 / 5.73 | 4.94 / 5.73 |
+| 2 | 3.55 / 4.38 | 3.79 / 4.85 |
+| 3 | 3.10 / 3.99 | 3.23 / 4.35 |
+| 5 | 2.69 / 3.61 | 2.62 / 3.79 |
+| 7 to 10 | 2.48 / 3.34 for all | 2.32/3.50 down to 2.06/3.24 |
+
+At k = 2, version 1.0.2 compared against an I(1) bound of 4.38 where the paper
+gives 4.85. That made rejection easier for a second reason entirely independent
+of the levels-versus-differences defect, and it was not mentioned in the 1.0.3
+notes because it had not yet been found. The 1.0.3 release notes also quoted
+4.38 as though it were correct; that wording is corrected above.
+
+## Verification
+
+Fifty-three adversarial checks pass and none fails. The ones worth naming:
+
+- every coefficient of the fitted model matches a conditional ECM built from
+  scratch with `quantreg`, to 1e-8;
+- the bounds F agrees with two further independent derivations of the same Wald
+  quadratic form, and is demonstrably not the `mean(t^2)` of earlier versions;
+- under a null of two independent random walks the 5 percent F route rejects in
+  9.3 percent of samples and the t route in 6.0 percent, against the essentially
+  unconditional rejection of 1.0.2;
+- across a grid of true adjustment speeds (-0.10, -0.35, -0.70) and true long-run
+  coefficients (-1.5, 0.8, 2.0) the sign is right in every cell and the largest
+  absolute error in the long-run estimate is 0.041;
+- re-introducing the 1.0.2 line makes every coefficient positive again and the
+  difference is exactly 1 at every quantile, which localises the repair;
+- thirty-six combinations of k = 1..4, p = 1..3 and q = 1..3 select the level
+  terms correctly and reproduce the long-run multiplier for every covariate.
+
+The audit script ships as `ADVERSARIAL.R` so that anyone can re-run it.
+
+## A note on what remains unverified
+
+Being explicit, because the point of this release is that unverified numbers do
+not ship silently: the 5 percent column of Tables CI(iii) and CII(iii) is checked
+against the source for every k from 1 to 10. Nothing else in the critical-value
+tables is. Cases I, II, IV and V are not available. The bootstrap null and the
+cross-quantile covariance remain as described under 1.0.3.
+
+---
+
 # fqardl 1.0.3
 
 **This is a correctness release. Results change. Anyone who has run version 1.0.2 should
@@ -29,8 +113,8 @@ The defect propagated:
   and the wrong sign in 100 percent of replications. Version 1.0.3 returns `+0.791` with the
   correct sign in 100 percent of replications.
 - **The bounds test manufactured cointegration** out of the unit root in `y`. On the package's
-  own `macro_data`, version 1.0.2 reported `F = 65.57` against a 5 percent upper bound of 4.38
-  and concluded "Evidence of cointegration". Version 1.0.3 reports `F = 2.34`, below the 5
+  own `macro_data`, version 1.0.2 reported `F = 65.57` against the correct 5 percent upper bound of
+  4.85 and concluded "Evidence of cointegration". Version 1.0.3 reports `F = 2.34`, below the 5
   percent lower bound of 3.79, and concludes no cointegration.
 - **`fnardl()` and `mtnardl()` were affected identically.** On `oil_gdp_data`, `fnardl()`
   previously reported an error-correction coefficient of `+0.894` with `t = +27.08` and
@@ -182,5 +266,4 @@ This release ships `verify_fqardl_103.R`, sixteen checks, all passing, including
 
 ### Acknowledgments
 
-* Dr. Merwan Roudane for the original Stata implementation
 * Rufyq Elngeh (رفيق النجاح) for supporting this development

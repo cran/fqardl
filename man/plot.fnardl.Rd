@@ -2,11 +2,7 @@
 % Please edit documentation in R/plots_nardl.R
 \name{plot.fnardl}
 \alias{plot.fnardl}
-\title{=============================================================================
-Visualization Functions for FNARDL
-Dynamic Multiplier Plots and Asymmetry Analysis
-=============================================================================
-Plot FNARDL Results}
+\title{Plot FNARDL Results}
 \usage{
 \method{plot}{fnardl}(
   x,

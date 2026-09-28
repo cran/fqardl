@@ -1,9 +1,8 @@
-#' =============================================================================
-#' Multi-Threshold Nonlinear ARDL (MTNARDL)
-#' Extension of NARDL with multiple threshold decomposition
-#' Ported from Python: Dr. Merwan Roudane
-#' R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
-#' =============================================================================
+# =============================================================================
+# Multi-Threshold Nonlinear ARDL (MTNARDL)
+# Extension of NARDL with multiple threshold decomposition
+# R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
+# =============================================================================
 
 #' Multi-Threshold NARDL Estimation
 #'

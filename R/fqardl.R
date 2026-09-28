@@ -1,11 +1,10 @@
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
-#' =============================================================================
-#' Fourier Quantile ARDL (FQARDL) - Main Functions
-#' Ported from Stata to R
-#' Original Stata implementation: Dr. Merwan Roudane
-#' R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
-#' =============================================================================
+# =============================================================================
+# Fourier Quantile ARDL (FQARDL) - Main Functions
+# Ported from Stata to R
+# R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
+# =============================================================================
 
 #' Fourier Quantile ARDL Estimation
 #'
@@ -111,7 +110,6 @@ fqardl <- function(formula, data,
   if (verbose) {
     message("=================================================================")
     message("   Fourier Quantile ARDL (FQARDL) Estimation")
-    message("   Ported from Stata | Original: Dr. Merwan Roudane")
     message("=================================================================\n")
     message(sprintf("Dependent variable: %s", y_name))
     message(sprintf("Independent variables: %s", paste(x_names, collapse = ", ")))

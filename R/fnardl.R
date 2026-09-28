@@ -1,9 +1,8 @@
-#' =============================================================================
-#' Fourier Nonlinear ARDL (FNARDL) Implementation
-#' Combines NARDL (Shin et al., 2014) with Fourier approximation
-#' Ported from Stata: Dr. Merwan Roudane
-#' R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
-#' =============================================================================
+# =============================================================================
+# Fourier Nonlinear ARDL (FNARDL) Implementation
+# Combines NARDL (Shin et al., 2014) with Fourier approximation
+# R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
+# =============================================================================
 
 #' Fourier Nonlinear ARDL Estimation
 #'

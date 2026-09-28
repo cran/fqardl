@@ -2,11 +2,7 @@
 % Please edit documentation in R/fourier.R
 \name{generate_fourier_terms}
 \alias{generate_fourier_terms}
-\title{=============================================================================
-Fourier Approximation Functions
-For capturing smooth structural breaks
-=============================================================================
-Generate Fourier Trigonometric Terms}
+\title{Generate Fourier Trigonometric Terms}
 \usage{
 generate_fourier_terms(n, k, cumulative = FALSE)
 }

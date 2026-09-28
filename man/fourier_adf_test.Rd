@@ -2,13 +2,7 @@
 % Please edit documentation in R/funitroot.R
 \name{fourier_adf_test}
 \alias{fourier_adf_test}
-\title{=============================================================================
-Fourier Unit Root Tests
-Based on Enders & Lee (2012) and Becker, Enders & Lee (2006)
-Ported from Python: Dr. Merwan Roudane
-R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
-=============================================================================
-Fourier ADF Test}
+\title{Fourier ADF Test}
 \usage{
 fourier_adf_test(
   y,

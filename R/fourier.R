@@ -1,7 +1,7 @@
-#' =============================================================================
-#' Fourier Approximation Functions
-#' For capturing smooth structural breaks
-#' =============================================================================
+# =============================================================================
+# Fourier Approximation Functions
+# For capturing smooth structural breaks
+# =============================================================================
 
 #' Generate Fourier Trigonometric Terms
 #'
