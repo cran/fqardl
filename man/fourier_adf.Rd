@@ -16,7 +16,8 @@ fourier_adf(y, max_k = 3, max_lag = 8, criterion = c("BIC", "AIC"))
 \item{criterion}{Lag selection criterion}
 }
 \value{
-A list with test results
+The result of \code{\link{fourier_adf_test}} with a constant,
+  with the additional fields \code{optimal_k} and \code{t_statistic}.
 }
 \description{
 Performs the Fourier Augmented Dickey-Fuller test for unit roots

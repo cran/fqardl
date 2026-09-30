@@ -16,7 +16,8 @@ fadf_f_test(y, model, k, p)
 \item{p}{Number of lags}
 }
 \value{
-List with F-statistic and p-value
+List with the F statistic, its critical values (Enders and Lee,
+  2012, Table 1b) and p_value = NA (the distribution is non-standard)
 }
 \description{
 Tests H0: gamma1 = gamma2 = 0 (no Fourier terms needed)

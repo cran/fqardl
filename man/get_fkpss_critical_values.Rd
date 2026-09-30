@@ -4,7 +4,7 @@
 \alias{get_fkpss_critical_values}
 \title{Get Fourier KPSS Critical Values}
 \usage{
-get_fkpss_critical_values(model, k)
+get_fkpss_critical_values(model, k, n = 100)
 }
 \description{
 Get Fourier KPSS Critical Values

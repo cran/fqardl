@@ -39,6 +39,8 @@ fourier_adf_test <- function(y, model = c("c", "ct"),
   
   model <- match.arg(model)
   criterion <- match.arg(criterion)
+  if (max_freq < 1 || max_freq > 5)
+    stop("'max_freq' must be between 1 and 5 (critical values are tabulated for k <= 5).")
   
   n <- length(y)
   
@@ -77,7 +79,6 @@ fourier_adf_test <- function(y, model = c("c", "ct"),
     message(sprintf("Optimal frequency (k): %d", optimal_k))
     message(sprintf("Optimal lag (p): %d", best_result$optimal_lag))
     message(sprintf("ADF statistic: %.4f", best_result$adf_stat))
-    message(sprintf("P-value: %.4f", best_result$p_value))
     message("-----------------------------------------------------------------")
   }
   
@@ -99,7 +100,9 @@ fourier_adf_test <- function(y, model = c("c", "ct"),
     message("-----------------------------------------------------------------")
     message("F-test for linearity (H0: no Fourier terms needed):")
     message(sprintf("   F-statistic: %.4f", f_test$f_stat))
-    message(sprintf("   P-value: %.4f", f_test$p_value))
+    message(sprintf("   Critical values 1%%/5%%/10%%: %.2f / %.2f / %.2f",
+                    f_test$critical_values[1], f_test$critical_values[2],
+                    f_test$critical_values[3]))
     message(sprintf("   -> %s", 
                 if (f_test$reject) "Reject linearity: Fourier terms ARE significant" 
                 else "Cannot reject linearity: Consider standard ADF"))
@@ -233,8 +236,9 @@ fit_fadf_model <- function(dy, y_lag1, sin_term, cos_term, p, model) {
   se_delta <- summary_fit$coefficients[delta_idx, 2]
   t_stat <- delta / se_delta
   
-  # P-value from Fourier ADF distribution (approximation)
-  p_value <- fadf_pvalue(t_stat, length(dy_adj), model)
+  # The distribution is non-standard and only critical values are
+  # tabulated (Enders and Lee, 2012), so no p-value is reported
+  p_value <- NA_real_
   
   # Information criteria
   k <- length(coef(model_fit))
@@ -265,7 +269,8 @@ fit_fadf_model <- function(dy, y_lag1, sin_term, cos_term, p, model) {
 #' @param k Fourier frequency
 #' @param p Number of lags
 #'
-#' @return List with F-statistic and p-value
+#' @return List with the F statistic, its critical values (Enders and Lee,
+#'   2012, Table 1b) and p_value = NA (the distribution is non-standard)
 #'
 #' @export
 fadf_f_test <- function(y, model, k, p) {
@@ -327,10 +332,10 @@ fadf_f_test <- function(y, model, k, p) {
   q <- 2  # Number of restrictions (sin and cos)
   df2 <- n_adj - ncol(X_unrestricted)
   f_stat <- ((ssr_restricted - ssr_unrestricted) / q) / (ssr_unrestricted / df2)
-  p_value <- 1 - pf(f_stat, q, df2)
-  
-  # Critical values from Enders & Lee (2012)
-  cv <- c(10.02, 7.41, 6.25)  # 1%, 5%, 10%
+  # Non-standard distribution under the unit root null: critical values
+  # from Enders and Lee (2012, Table 1b), no p-value
+  p_value <- NA_real_
+  cv <- get_fadf_f_critical_values(n, model)
   
   return(list(
     f_stat = f_stat,
@@ -345,46 +350,42 @@ fadf_f_test <- function(y, model, k, p) {
 #'
 #' @keywords internal
 get_fadf_critical_values <- function(n, model, k) {
-  # Critical values from Enders & Lee (2012) Table 1
-  # Rows: k=1,2,3; Columns: 1%, 5%, 10%
-  
-  if (model == "c") {
-    cv_table <- matrix(c(
-      -4.37, -3.78, -3.47,  # k=1
-      -4.20, -3.62, -3.32,  # k=2
-      -4.11, -3.54, -3.25   # k=3
-    ), nrow = 3, byrow = TRUE)
-  } else {  # ct
-    cv_table <- matrix(c(
-      -4.81, -4.25, -3.96,  # k=1
-      -4.67, -4.11, -3.82,  # k=2
-      -4.58, -4.02, -3.73   # k=3
-    ), nrow = 3, byrow = TRUE)
-  }
-  
-  k_adj <- min(k, 3)
-  return(cv_table[k_adj, ])
+  # Enders and Lee (2012), Table 1a, as tabulated in TSPDLIB (Nazlioglu,
+  # _getFourierADFCrit). Rows k = 1..5; columns 1%, 5%, 10%; four
+  # sample-size blocks (T <= 150, <= 350, <= 500, > 500).
+  tabs <- if (model == "c") list(
+    c(-4.42, -3.81, -3.49, -3.97, -3.27, -2.91, -3.77, -3.07, -2.71,
+      -3.64, -2.97, -2.64, -3.58, -2.93, -2.60),
+    c(-4.37, -3.78, -3.47, -3.93, -3.26, -2.92, -3.74, -3.06, -2.72,
+      -3.62, -2.98, -2.65, -3.55, -2.94, -2.62),
+    c(-4.35, -3.76, -3.46, -3.91, -3.26, -2.91, -3.70, -3.06, -2.72,
+      -3.62, -2.97, -2.66, -3.56, -2.94, -2.62),
+    c(-4.31, -3.75, -3.45, -3.89, -3.25, -2.90, -3.69, -3.05, -2.71,
+      -3.61, -2.96, -2.64, -3.53, -2.93, -2.61)
+  ) else list(
+    c(-4.95, -4.35, -4.05, -4.69, -4.05, -3.71, -4.45, -3.78, -3.44,
+      -4.29, -3.65, -3.29, -4.20, -3.56, -3.22),
+    c(-4.87, -4.31, -4.02, -4.62, -4.01, -3.69, -4.38, -3.77, -3.43,
+      -4.27, -3.63, -3.31, -4.18, -3.56, -3.24),
+    c(-4.81, -4.29, -4.01, -4.57, -3.99, -3.67, -4.38, -3.76, -3.43,
+      -4.25, -3.64, -3.31, -4.18, -3.56, -3.25),
+    c(-4.80, -4.27, -4.00, -4.58, -3.98, -3.67, -4.38, -3.75, -3.43,
+      -4.24, -3.63, -3.30, -4.16, -3.55, -3.24))
+  if (k > 5) return(rep(NA_real_, 3))
+  blk <- if (n <= 150) 1 else if (n <= 350) 2 else if (n <= 500) 3 else 4
+  matrix(tabs[[blk]], 5, 3, byrow = TRUE)[k, ]
 }
 
 
-#' Approximate P-value for Fourier ADF
-#'
-#' @keywords internal
-fadf_pvalue <- function(t_stat, n, model) {
-  # Approximation based on response surface
-  # Uses interpolation between critical values
-  
-  cv <- get_fadf_critical_values(n, model, 1)
-  
-  if (t_stat < cv[1]) {
-    return(0.001)
-  } else if (t_stat < cv[2]) {
-    return(0.01 + (t_stat - cv[1]) / (cv[2] - cv[1]) * 0.04)
-  } else if (t_stat < cv[3]) {
-    return(0.05 + (t_stat - cv[2]) / (cv[3] - cv[2]) * 0.05)
-  } else {
-    return(0.10 + (t_stat - cv[3]) * 0.1)
-  }
+# F test for the Fourier terms: Enders and Lee (2012), Table 1b, as
+# tabulated in TSPDLIB (fstatADFcv). Columns 1%, 5%, 10%.
+get_fadf_f_critical_values <- function(n, model) {
+  tab <- if (model == "c") rbind(c(10.35, 7.58, 6.35), c(10.02, 7.41, 6.25),
+                                 c(9.78, 7.29, 6.16), c(9.72, 7.25, 6.11))
+         else rbind(c(12.21, 9.14, 7.78), c(11.70, 8.88, 7.62),
+                    c(11.52, 8.76, 7.53), c(11.35, 8.71, 7.50))
+  blk <- if (n <= 150) 1 else if (n <= 350) 2 else if (n <= 500) 3 else 4
+  tab[blk, ]
 }
 
 
@@ -393,7 +394,8 @@ print.fadf <- function(x, ...) {
   cat("\nFourier ADF Test (Enders & Lee, 2012)\n")
   cat("=====================================\n")
   cat(sprintf("ADF Statistic: %.4f\n", x$statistic))
-  cat(sprintf("P-value: %.4f\n", x$p_value))
+  cat(sprintf("Critical values 1%%/5%%/10%%: %.4f / %.4f / %.4f\n",
+              x$critical_values[1], x$critical_values[2], x$critical_values[3]))
   cat(sprintf("Optimal frequency: k = %d\n", x$optimal_frequency))
   cat(sprintf("Optimal lag: p = %d\n", x$optimal_lag))
   cat(sprintf("Conclusion: %s\n", 
@@ -423,6 +425,8 @@ print.fadf <- function(x, ...) {
 fourier_kpss_test <- function(y, model = c("c", "ct"), max_freq = 3, verbose = TRUE) {
   
   model <- match.arg(model)
+  if (max_freq < 1 || max_freq > 5)
+    stop("'max_freq' must be between 1 and 5 (critical values are tabulated for k <= 5).")
   n <- length(y)
   t_index <- 1:n
   
@@ -452,12 +456,11 @@ fourier_kpss_test <- function(y, model = c("c", "ct"), max_freq = 3, verbose = T
     message(sprintf("Optimal frequency: k = %d\n", optimal_k))
     message("-----------------------------------------------------------------")
     message(sprintf("KPSS statistic: %.6f", best_result$kpss_stat))
-    message(sprintf("P-value: %.4f", best_result$p_value))
     message("-----------------------------------------------------------------")
   }
   
   # Critical values
-  cv <- get_fkpss_critical_values(model, optimal_k)
+  cv <- get_fkpss_critical_values(model, optimal_k, n)
   if (verbose) {
     message("\nCritical values:")
     message(sprintf("   1%%  : %.4f %s", cv[1], 
@@ -526,21 +529,12 @@ estimate_fkpss <- function(y, k, model) {
   # KPSS statistic
   kpss_stat <- sum(S^2) / (n^2 * sigma2_lr)
   
-  # P-value approximation
-  cv <- get_fkpss_critical_values(model, k)
-  if (kpss_stat > cv[1]) {
-    p_value <- 0.001
-  } else if (kpss_stat > cv[2]) {
-    p_value <- 0.05 - (cv[1] - kpss_stat) / (cv[1] - cv[2]) * 0.04
-  } else if (kpss_stat > cv[3]) {
-    p_value <- 0.10 - (cv[2] - kpss_stat) / (cv[2] - cv[3]) * 0.05
-  } else {
-    p_value <- 0.10 + (cv[3] - kpss_stat) * 0.5
-  }
-  
+  # Only critical values are tabulated (Becker, Enders and Lee, 2006)
+  p_value <- NA_real_
+
   return(list(
     kpss_stat = kpss_stat,
-    p_value = min(1, max(0, p_value)),
+    p_value = p_value,
     ssr = ssr
   ))
 }
@@ -567,34 +561,36 @@ newey_west_variance <- function(resid, bandwidth) {
 #' Get Fourier KPSS Critical Values
 #'
 #' @keywords internal
-get_fkpss_critical_values <- function(model, k) {
-  # From Becker, Enders & Lee (2006) Table 1
-  
-  if (model == "c") {
-    cv_table <- matrix(c(
-      0.2699, 0.1720, 0.1318,  # k=1
-      0.2022, 0.1321, 0.1034,  # k=2
-      0.1669, 0.1117, 0.0886   # k=3
-    ), nrow = 3, byrow = TRUE)
-  } else {
-    cv_table <- matrix(c(
-      0.1295, 0.0912, 0.0756,  # k=1
-      0.1084, 0.0787, 0.0661,  # k=2
-      0.0958, 0.0709, 0.0602   # k=3
-    ), nrow = 3, byrow = TRUE)
-  }
-  
-  k_adj <- min(k, 3)
-  return(cv_table[k_adj, ])
+get_fkpss_critical_values <- function(model, k, n = 100) {
+  # Becker, Enders and Lee (2006), as tabulated in TSPDLIB
+  # (_getFourierKPSSCrit). Rows k = 1..5; columns 1%, 5%, 10%; sample-size
+  # blocks T <= 250, <= 500, > 500.
+  tabs <- if (model == "c") list(
+    c(0.2699, 0.1720, 0.1318, 0.6671, 0.4152, 0.3150, 0.7182, 0.4480, 0.3393,
+      0.7222, 0.4592, 0.3476, 0.7386, 0.4626, 0.3518),
+    c(0.2709, 0.1696, 0.1294, 0.6615, 0.4075, 0.3053, 0.7046, 0.4424, 0.3309,
+      0.7152, 0.4491, 0.3369, 0.7344, 0.4571, 0.3415),
+    c(0.2706, 0.1704, 0.1295, 0.6526, 0.4047, 0.3050, 0.7086, 0.4388, 0.3304,
+      0.7163, 0.4470, 0.3355, 0.7297, 0.4525, 0.3422)
+  ) else list(
+    c(0.0716, 0.0546, 0.0471, 0.2022, 0.1321, 0.1034, 0.2103, 0.1423, 0.1141,
+      0.2170, 0.1478, 0.1189, 0.2177, 0.1484, 0.1201),
+    c(0.0720, 0.0539, 0.0463, 0.1968, 0.1278, 0.0995, 0.2091, 0.1404, 0.1123,
+      0.2111, 0.1441, 0.1155, 0.2178, 0.1465, 0.1178),
+    c(0.0718, 0.0538, 0.0461, 0.1959, 0.1275, 0.0994, 0.2081, 0.1398, 0.1117,
+      0.2139, 0.1436, 0.1149, 0.2153, 0.1451, 0.1163))
+  if (k > 5) return(rep(NA_real_, 3))
+  blk <- if (n <= 250) 1 else if (n <= 500) 2 else 3
+  matrix(tabs[[blk]], 5, 3, byrow = TRUE)[k, ]
 }
 
 
-#' @export
 print.fkpss <- function(x, ...) {
   cat("\nFourier KPSS Test (Becker, Enders & Lee, 2006)\n")
   cat("==============================================\n")
   cat(sprintf("KPSS Statistic: %.6f\n", x$statistic))
-  cat(sprintf("P-value: %.4f\n", x$p_value))
+  cat(sprintf("Critical values 1%%/5%%/10%%: %.4f / %.4f / %.4f\n",
+              x$critical_values[1], x$critical_values[2], x$critical_values[3]))
   cat(sprintf("Optimal frequency: k = %d\n", x$optimal_frequency))
   cat(sprintf("Conclusion: %s\n", 
               if (x$reject_null) "Non-stationary" else "Stationary"))
