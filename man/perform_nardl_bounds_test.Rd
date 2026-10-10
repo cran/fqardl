@@ -6,7 +6,34 @@
 \usage{
 perform_nardl_bounds_test(nardl_result, n, k, case)
 }
+\arguments{
+\item{nardl_result}{Output of \code{estimate_nardl}.}
+
+\item{n}{Sample size.}
+
+\item{k}{Number of level regressors (used when the design does not record
+them).}
+
+\item{case}{Model case; only 3 is supported.}
+}
+\value{
+A list with \code{F_stat}, \code{t_stat}, \code{Find_stat},
+  \code{k}, the 5 percent bounds \code{cv_5} and \code{t_cv_5},
+  \code{bounds_valid}, \code{bounds_note} and \code{decision}.
+}
 \description{
-NARDL Bounds Test
+Wald bounds statistics of the FNARDL model. The overall F statistic tests
+the lagged level of y and the lagged levels of the regressors (partial
+sums and undecomposed variables); k is the number of level regressors.
+Up to 1.0.6 the F statistic also included the lagged differences
+\code{dy_lag1} and \code{d_*_lag1} whenever p or q exceeded 1.
+}
+\details{
+With Fourier terms in the regression (always the case for models estimated
+by \code{fnardl}) the PSS (2001) bounds do not apply (Monte Carlo
+evidence): no analytical verdict is given
+and the PSS bounds are returned only for reference, labelled as the bounds
+for the model without Fourier terms, not valid with Fourier terms. Use the
+recursive bootstrap (\code{fnardl(..., bootstrap = TRUE)}).
 }
 \keyword{internal}

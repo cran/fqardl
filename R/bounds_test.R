@@ -1,6 +1,6 @@
 # =============================================================================
 # Bounds Test for Cointegration
-# Pesaran, Shin & Smith (2001), Journal of Applied Econometrics 16(3), 289-326.
+# Pesaran, Shin and Smith (2001), Journal of Applied Econometrics 16(3), 289-326.
 #
 # CONTAINMENT RELEASE 1.0.3 -- this file was rewritten. See NEWS.md.
 # In 1.0.2 the "F-statistic" was mean(t^2) over the terms matching `_lag1$`.
@@ -31,8 +31,10 @@
 #'
 #' @return A list with one element per quantile plus a \code{summary} data frame.
 #'   Each per-quantile element contains \code{F_stat}, \code{t_stat}, the
-#'   critical value bounds, and a three-way \code{decision} that reports the
-#'   inconclusive region rather than forcing a binary verdict.
+#'   critical value bounds, \code{bounds_valid}, \code{bounds_note} and
+#'   \code{decision}. Without Fourier terms the decision is three-way and
+#'   reports the inconclusive region; with Fourier terms it states that no
+#'   analytical verdict is available.
 #'
 #' @details
 #' \strong{Only Case III is supported.} In versions up to 1.0.2 the \code{case}
@@ -43,15 +45,36 @@
 #' error for any case other than 3. Proper case handling requires changing the
 #' design matrix, not the table, and is scheduled for 2.0.0.
 #'
+#' \strong{Fourier caveat.} The PSS critical values are tabulated for the
+#' model without Fourier terms. With Fourier terms in the regression the
+#' null distributions change and the PSS (2001) bounds do not apply with
+#' Fourier terms (Monte Carlo evidence; in a Monte Carlo
+#' with n = 100 and independent random walks the 5 percent decision of
+#' fqardl 1.0.6 rejected in 10 percent of samples, the fnardl decision in
+#' 47.5 percent). Since 1.1.0, whenever the design contains Fourier terms
+#' (columns named \code{sin_*} or \code{cos_*}, which is always the case
+#' for models estimated by \code{fqardl} and \code{fnardl}), no analytical
+#' verdict is given: \code{decision} says so, \code{bounds_valid} is
+#' \code{FALSE}, and the bounds are returned only for reference, labelled as
+#' the bounds for the model without Fourier terms, not valid with Fourier
+#' terms. Use the recursive bootstrap (\code{bootstrap = TRUE} in
+#' \code{\link{fqardl}}, see \code{\link{bootstrap_bounds_test}}); when
+#' \code{fqardl} or \code{fnardl} is called without the bootstrap, their
+#' decision text adds this advice.
+#'
 #' \strong{Quantile caveat.} The PSS critical values were simulated for the
 #' conditional mean. Applying them quantile by quantile has no distribution
-#' theory behind it. Treat quantile-specific verdicts as descriptive and prefer
-#' \code{bootstrap_bounds_test} for inference.
+#' theory behind it (Cho, Kim and Shin 2015 give no bounds test for the null
+#' of no cointegration), so the quantile statistics are descriptive.
 #'
 #' @references
 #' Pesaran, M.H., Shin, Y. and Smith, R.J. (2001). Bounds testing approaches to
 #' the analysis of level relationships. \emph{Journal of Applied Econometrics},
 #' 16(3), 289-326. \doi{10.1002/jae.616}
+#'
+#' Cho, J.S., Kim, T. and Shin, Y. (2015). Quantile cointegration in the
+#' autoregressive distributed-lag modeling framework. \emph{Journal of
+#' Econometrics}, 188(1), 281-300. \doi{10.1016/j.jeconom.2015.05.003}
 #'
 #' @export
 perform_bounds_test <- function(qardl_results, n, k, case = 3) {
@@ -72,7 +95,8 @@ perform_bounds_test <- function(qardl_results, n, k, case = 3) {
   m_restr <- k + 1L   # Cases I, III, V. Cases II and IV would use k + 2.
 
   per_tau <- lapply(qardl_results, function(res)
-    bounds_one_quantile(res, k = k, m_restr = m_restr, cv = cv))
+    bounds_one_quantile(res, k = k, m_restr = m_restr, cv = cv,
+                        fourier = has_fourier_terms(names(res$coefficients))))
 
   summary_df <- data.frame(
     tau      = vapply(qardl_results, function(r) r$tau,          numeric(1)),
@@ -100,9 +124,26 @@ perform_bounds_test <- function(qardl_results, n, k, case = 3) {
 }
 
 
+# TRUE when a design contains Fourier terms (columns sin_* / cos_*)
+has_fourier_terms <- function(nms) any(grepl("^(sin|cos)_", nms))
+
+# Label of PSS bounds shown for a model with Fourier terms
+fourier_bounds_note <- paste(
+  "Bounds for the model without Fourier terms; not valid with Fourier terms.")
+
+# Decision text when the design contains Fourier terms
+fourier_no_verdict <- paste(
+  "No analytical verdict: the PSS bounds are for the model without Fourier",
+  "terms and are not valid with Fourier terms")
+
+# Advice appended by fqardl() and fnardl() when the bootstrap was not run
+fourier_boot_advice <- "; use the bootstrap (bootstrap = TRUE)"
+
+
+
 #' Bounds test at a single quantile
 #' @keywords internal
-bounds_one_quantile <- function(res, k, m_restr, cv) {
+bounds_one_quantile <- function(res, k, m_restr, cv, fourier = FALSE) {
 
   cf  <- res$coefficients
   nms <- names(cf)
@@ -153,6 +194,12 @@ bounds_one_quantile <- function(res, k, m_restr, cv) {
               else
                 "Mixed evidence; use bootstrap_bounds_test"
 
+  # NEW in 1.1.0: the PSS (2001) bounds do not apply with Fourier terms.
+  if (fourier) {
+    dec_F <- dec_t <- "not available (Fourier terms)"
+    decision <- fourier_no_verdict
+  }
+
   list(
     tau         = res$tau,
     F_stat      = F_stat,
@@ -167,6 +214,9 @@ bounds_one_quantile <- function(res, k, m_restr, cv) {
     decision_F  = dec_F,
     decision_t  = dec_t,
     decision    = decision,
+    bounds_valid = !fourier,
+    bounds_note = if (fourier) fourier_bounds_note else
+                    "PSS (2001) Table CI(iii) and CII(iii), 5 percent",
     n_restrictions = m_restr
   )
 }
@@ -242,88 +292,131 @@ get_pss_critical_values <- function(k, case = 3) {
 #' Bootstrap Bounds Test
 #'
 #' @description
-#' Bootstrap cointegration test in the spirit of McNown, Sam and Goh (2018).
+#' Recursive bootstrap bounds test for the Fourier ARDL model estimated by
+#' \code{\link{fqardl}}. Rewritten in 1.1.0.
 #'
-#' \strong{Known limitation, retained from 1.0.2 and scheduled for 2.0.0.}
-#' The pseudo-samples generated here are not built by accumulating the
-#' differenced series under the null; each replication draws a fresh random walk
-#' whose scale is taken from the data. The three statistics also share a single
-#' restricted null rather than each having its own. Treat the p-values as
-#' indicative only.
+#' @details
+#' The pseudo-samples are generated by the shared recursive bootstrap engine
+#' (file \code{ardl_boot_engine.R}, engine version 1.1.0, copied verbatim
+#' from the package 'ardlverse'). Under each null hypothesis the restricted
+#' conditional error correction model (ECM) for \eqn{\Delta y} is estimated
+#' by OLS together with a marginal model for \eqn{\Delta x}; \eqn{y^*} and
+#' \eqn{x^*} are then generated recursively from resampled, recentred
+#' residuals, with the Fourier terms held fixed as deterministic regressors.
+#' \describe{
+#'   \item{\code{scheme = "bvz"} (default)}{Bertelli, Vacca and Zoia (2022):
+#'     a separate restricted model for each of the three statistics, a
+#'     marginal VECM for \eqn{\Delta x}, residuals recentred after each
+#'     draw, initial values from a random block of the data (the levels of
+#'     the regressors and partial sums continue from the block).}
+#'   \item{\code{scheme = "mcnown"}}{The Fov null for all statistics
+#'     (McNown, Sam and Goh 2018, Steps 1-8) applied to the conditional ECM
+#'     (package choice; MSG write the y equation in unconditional form): the
+#'     null of the overall F test generates the samples for all statistics,
+#'     the \eqn{\Delta x} equation is unrestricted (it includes
+#'     \eqn{y_{t-1}}), residuals mean-centred once, the first observations
+#'     as initial values.}
+#' }
+#' The three statistics are computed from fqardl's own design
+#' (\code{build_ardl_design}) estimated by OLS: the overall F test on the
+#' lagged levels of y and x (Fov), the t ratio on the lagged level of y (t)
+#' and the F test on the lagged levels of x (Find). The same function is
+#' applied to the data and to every bootstrap sample, so the bootstrap
+#' distribution refers to the reported statistics. When \code{reselect} is
+#' given, the Fourier frequency (unless fixed) and the lag orders are chosen
+#' again on every bootstrap sample with \code{select_fourier_frequency} and
+#' \code{select_optimal_lags}. Re-selection is a package choice: Bertelli,
+#' Vacca and Zoia (2022, step 5(c)) re-estimate the unrestricted model on
+#' each bootstrap sample but do not discuss re-selection. In the package's
+#' Monte Carlo, holding a data-selected frequency fixed made the test
+#' oversized.
 #'
-#' @param y Dependent variable.
-#' @param X Independent variables.
-#' @param fourier Fourier terms.
-#' @param p Lag for y.
-#' @param q Lag for X.
-#' @param tau Quantiles.
+#' The decision combines the three tests with the AND rule: cointegration
+#' only if Fov, t and Find all reject at level \code{level}; Fov rejecting
+#' without t, or Fov and t without Find, are reported as the degenerate
+#' cases of the first and second type. Critical values are order statistics
+#' of the bootstrap distributions.
+#'
+#' The statistics are OLS (conditional mean) statistics. Cho, Kim and Shin
+#' (2015) give no bounds test and no bootstrap for the null of no
+#' cointegration in the quantile ARDL model, and no quantile-specific
+#' bootstrap statistic is computed. Versions up to 1.0.6 regressed a new
+#' Gaussian random walk on fixed regressors at the first quantile and
+#' declared cointegration when F or t rejected; that procedure was oversized
+#' and has been removed.
+#'
+#' @param y Dependent variable (no missing values).
+#' @param X Matrix of regressors in levels.
+#' @param fourier Matrix of Fourier terms (from \code{generate_fourier_terms})
+#'   used for the observed data and as fixed deterministic terms of the
+#'   bootstrap data generating process.
+#' @param p Lag order for y, as in \code{build_ardl_design}.
+#' @param q Lag order for X, as in \code{build_ardl_design}.
+#' @param tau Not used since 1.1.0 (the statistics are OLS statistics); kept
+#'   for compatibility.
 #' @param case Model case; only 3 is supported.
 #' @param n_boot Number of bootstrap replications.
-#' @param verbose Print progress messages.
+#' @param verbose Print a progress message.
+#' @param reselect \code{NULL} (hold the frequency and lags fixed) or a list
+#'   with elements \code{max_k}, \code{max_p}, \code{max_q},
+#'   \code{criterion} and optionally \code{k} (a frequency fixed by the
+#'   user in advance) to re-run the selection on every bootstrap sample.
+#' @param scheme \code{"bvz"} or \code{"mcnown"}; see Details.
+#' @param level Significance level of the decision.
+#' @param seed Optional seed for the bootstrap; the caller's random number
+#'   state is restored afterwards.
 #'
-#' @return A list with bootstrap p-values.
+#' @return A list with the observed statistics (\code{orig_F},
+#'   \code{orig_t}, \code{orig_Find}), the bootstrap distributions
+#'   (\code{boot_F}, \code{boot_t}, \code{boot_Find}; failed replications are
+#'   \code{NA}), the p-values (\code{p_value_F}, \code{p_value_t},
+#'   \code{p_value_Find}), the critical values \code{cv} at 10, 5, 2.5 and 1
+#'   percent, the decision code \code{decision} and its text \code{label},
+#'   and the engine output \code{engine}.
+#'
+#' @references
+#' Bertelli, S., Vacca, G. and Zoia, M. (2022). Bootstrap cointegration tests
+#' in ARDL models. \emph{Economic Modelling}, 116, 105987.
+#' \doi{10.1016/j.econmod.2022.105987}
+#'
+#' McNown, R., Sam, C.Y. and Goh, S.K. (2018). Bootstrapping the
+#' autoregressive distributed lag test for cointegration. \emph{Applied
+#' Economics}, 50(13), 1509-1521. \doi{10.1080/00036846.2017.1366643}
+#'
+#' Cho, J.S., Kim, T. and Shin, Y. (2015). Quantile cointegration in the
+#' autoregressive distributed-lag modeling framework. \emph{Journal of
+#' Econometrics}, 188(1), 281-300. \doi{10.1016/j.jeconom.2015.05.003}
 #'
 #' @export
-bootstrap_bounds_test <- function(y, X, fourier, p, q, tau, case, n_boot = 1000,
-                                  verbose = FALSE) {
+bootstrap_bounds_test <- function(y, X, fourier, p, q, tau = NULL, case = 3,
+                                  n_boot = 1000, verbose = FALSE,
+                                  reselect = NULL, scheme = c("bvz", "mcnown"),
+                                  level = 0.05, seed = NULL) {
 
-  warning("bootstrap_bounds_test(): the null DGP is not yet the McNown, Sam and ",
-          "Goh (2018) construction. See ?bootstrap_bounds_test. p-values are ",
-          "indicative only.", call. = FALSE)
+  if (!identical(as.numeric(case), 3))
+    stop("Only case = 3 (unrestricted intercept, no trend) is supported.",
+         call. = FALSE)
+  scheme <- match.arg(scheme)
+  y <- as.numeric(y)
+  X <- as.matrix(X)
+  fourier <- as.matrix(fourier)
+  if (nrow(fourier) != length(y))
+    stop("'fourier' must have one row per observation", call. = FALSE)
+  if (verbose)
+    message(sprintf("   Recursive bootstrap (%s), %d replications", scheme, n_boot))
 
-  n <- length(y)
-  k <- ncol(X)
+  sc <- .fq_scheme(scheme)
+  spec <- list(fourier = fourier, p = p, q = q)
+  eng <- .ardl_boot_engine(
+    y, X, p = p - 1, q = rep(q - 1, ncol(X)), case = 3, t0 = max(p, q) + 1,
+    det = fourier, nulls = sc$nulls, xmodel = sc$xmodel, B = n_boot,
+    init = sc$init, recentre = sc$recentre,
+    stat_fun = function(yy, xx, sp) .fq_stats_qardl(yy, xx, sp),
+    select = .fq_make_select(reselect), spec = spec, use_find = TRUE,
+    level = level, seed = seed)
 
-  orig <- estimate_qardl(y, X, fourier, p, q, tau[1], case)
-  nms  <- names(orig$coefficients)
-  lev  <- c("y_lag1", grep("^x[0-9]+_lag1$", nms, value = TRUE))
-
-  wald_F <- function(res) {
-    V <- res$vcov
-    if (is.null(V)) return(NA_real_)
-    pos <- match(lev, names(res$coefficients))
-    R <- matrix(0, nrow = length(pos), ncol = length(res$coefficients))
-    R[cbind(seq_along(pos), pos)] <- 1
-    Rb  <- R %*% res$coefficients
-    out <- tryCatch(as.numeric(t(Rb) %*% solve(R %*% V %*% t(R)) %*% Rb),
-                    error = function(e) NA_real_)
-    out / (k + 1)
-  }
-
-  orig_F <- wald_F(orig)
-  orig_t <- unname(orig$coefficients["y_lag1"] / orig$std_errors["y_lag1"])
-
-  boot_F <- rep(NA_real_, n_boot)
-  boot_t <- rep(NA_real_, n_boot)
-
-  for (b in seq_len(n_boot)) {
-    y_boot <- cumsum(stats::rnorm(n, sd = stats::sd(diff(y))))
-    res <- tryCatch(estimate_qardl(y_boot, X, fourier, p, q, tau[1], case),
-                    error = function(e) NULL)
-    if (!is.null(res)) {
-      boot_t[b] <- unname(res$coefficients["y_lag1"] / res$std_errors["y_lag1"])
-      boot_F[b] <- wald_F(res)
-    }
-    if (verbose && b %% 100 == 0)
-      message(sprintf("   Bootstrap replication %d/%d", b, n_boot))
-  }
-
-  boot_F <- boot_F[!is.na(boot_F)]
-  boot_t <- boot_t[!is.na(boot_t)]
-
-  list(
-    n_boot    = n_boot,
-    orig_F    = orig_F,
-    orig_t    = orig_t,
-    boot_F    = boot_F,
-    boot_t    = boot_t,
-    p_value_F = mean(boot_F >= orig_F),
-    p_value_t = mean(boot_t <= orig_t),
-    decision  = if (mean(boot_F >= orig_F) < 0.05 || mean(boot_t <= orig_t) < 0.05)
-                  "Reject the null: evidence of cointegration"
-                else
-                  "Fail to reject the null: no evidence of cointegration"
-  )
+  .fq_boot_result(eng, scheme, n_boot, reselect,
+                  model = "Fourier ARDL (conditional mean), fqardl design")
 }
 
 

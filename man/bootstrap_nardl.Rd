@@ -4,9 +4,63 @@
 \alias{bootstrap_nardl}
 \title{Bootstrap NARDL Test}
 \usage{
-bootstrap_nardl(y, X, fourier, p, q, case, n_boot)
+bootstrap_nardl(
+  y,
+  x,
+  x_names,
+  decompose,
+  fourier,
+  p,
+  q,
+  case = 3,
+  n_boot = 1000,
+  reselect = NULL,
+  scheme = c("bvz", "mcnown"),
+  level = 0.05,
+  seed = NULL
+)
+}
+\arguments{
+\item{y}{Dependent variable.}
+
+\item{x}{Matrix of the original regressors (columns \code{x_names}).}
+
+\item{x_names}{Names of the regressors.}
+
+\item{decompose}{Names of the decomposed regressors.}
+
+\item{fourier}{Fourier terms of the observed model.}
+
+\item{p, q}{Lag orders as in \code{estimate_nardl}.}
+
+\item{case}{Model case; only 3 is supported.}
+
+\item{n_boot}{Number of bootstrap replications.}
+
+\item{reselect}{\code{NULL} or a list (\code{max_k}, \code{max_p},
+\code{max_q}, \code{criterion}, optional \code{k}); see
+\code{\link{bootstrap_bounds_test}}.}
+
+\item{scheme}{\code{"bvz"} or \code{"mcnown"}.}
+
+\item{level}{Significance level of the decision.}
+
+\item{seed}{Optional seed; the caller's random number state is restored.}
+}
+\value{
+A list as returned by \code{\link{bootstrap_bounds_test}};
+  \code{p_value} is the p-value of the t test (as in 1.0.6).
 }
 \description{
-Bootstrap NARDL Test
+Recursive bootstrap bounds test for the FNARDL model (rewritten in
+1.1.0). The regressors x are generated recursively and the partial sums
+are rebuilt from x* with \code{decompose_variables}; the Fourier terms are
+fixed deterministic regressors; the statistics (Fov, t, Find) are OLS
+statistics of fnardl's own design; the Fourier frequency (unless fixed)
+and the lag orders are re-selected in every replication when
+\code{reselect} is given (a package choice); the decision is the AND rule. See
+\code{\link{bootstrap_bounds_test}} for the schemes. Up to 1.0.6 this
+function regressed a new Gaussian random walk on fixed regressors and
+reported the t test only, without a warning.
 }
 \keyword{internal}

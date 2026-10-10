@@ -2,33 +2,76 @@
 % Please edit documentation in R/bounds_test.R
 \name{perform_bounds_test}
 \alias{perform_bounds_test}
-\title{Perform Bounds Test for Cointegration}
+\title{Wald Bounds Test for Cointegration}
 \usage{
 perform_bounds_test(qardl_results, n, k, case = 3)
 }
 \arguments{
-\item{qardl_results}{List of QARDL estimation results}
+\item{qardl_results}{List of quantile estimation results from
+\code{estimate_qardl}. The test is computed for every element.}
 
-\item{n}{Sample size}
+\item{n}{Sample size.}
 
-\item{k}{Number of regressors}
+\item{k}{Number of regressors (excluding the dependent variable).}
 
-\item{case}{Model case (1-5)}
+\item{case}{Model case. Only \code{case = 3} is supported; see Details.}
 }
 \value{
-List with bounds test results
+A list with one element per quantile plus a \code{summary} data frame.
+  Each per-quantile element contains \code{F_stat}, \code{t_stat}, the
+  critical value bounds, \code{bounds_valid}, \code{bounds_note} and
+  \code{decision}. Without Fourier terms the decision is three-way and
+  reports the inconclusive region; with Fourier terms it states that no
+  analytical verdict is available.
 }
 \description{
-Performs the PSS (2001) bounds test for cointegration in the ARDL framework.
-Tests the joint significance of the lagged level variables.
+Computes the Pesaran, Shin and Smith (2001) bounds test from an estimated
+conditional error correction model, at every quantile supplied.
+
+The F statistic is the Wald statistic for the joint null that all lagged
+level coefficients are zero, divided by the number of restrictions:
+\deqn{W = (Rb)' (R V R')^{-1} (Rb), \qquad F = W / m}
+with \eqn{m = k+1} in Cases I, III and V and \eqn{m = k+2} in Cases II and IV.
+The t statistic is the ratio on the lagged level of the dependent variable,
+which is negative under cointegration.
 }
 \details{
-The five cases are:
-\itemize{
-  \item Case 1: No intercept, no trend
-  \item Case 2: Restricted intercept, no trend
-  \item Case 3: Unrestricted intercept, no trend (most common)
-  \item Case 4: Unrestricted intercept, restricted trend
-  \item Case 5: Unrestricted intercept, unrestricted trend
+\strong{Only Case III is supported.} In versions up to 1.0.2 the \code{case}
+argument was accepted and never used: the design matrix was always that of
+Case III (unrestricted intercept, no trend), while the critical values were
+switched. Cases 4 and 5 therefore compared a Case III model against Case IV
+and Case V tables. Rather than continue to report that, this release raises an
+error for any case other than 3. Proper case handling requires changing the
+design matrix, not the table, and is scheduled for 2.0.0.
+
+\strong{Fourier caveat.} The PSS critical values are tabulated for the
+model without Fourier terms. With Fourier terms in the regression the
+null distributions change and the PSS (2001) bounds do not apply with
+Fourier terms (Monte Carlo evidence; in a Monte Carlo
+with n = 100 and independent random walks the 5 percent decision of
+fqardl 1.0.6 rejected in 10 percent of samples, the fnardl decision in
+47.5 percent). Since 1.1.0, whenever the design contains Fourier terms
+(columns named \code{sin_*} or \code{cos_*}, which is always the case
+for models estimated by \code{fqardl} and \code{fnardl}), no analytical
+verdict is given: \code{decision} says so, \code{bounds_valid} is
+\code{FALSE}, and the bounds are returned only for reference, labelled as
+the bounds for the model without Fourier terms, not valid with Fourier
+terms. Use the recursive bootstrap (\code{bootstrap = TRUE} in
+\code{\link{fqardl}}, see \code{\link{bootstrap_bounds_test}}); when
+\code{fqardl} or \code{fnardl} is called without the bootstrap, their
+decision text adds this advice.
+
+\strong{Quantile caveat.} The PSS critical values were simulated for the
+conditional mean. Applying them quantile by quantile has no distribution
+theory behind it (Cho, Kim and Shin 2015 give no bounds test for the null
+of no cointegration), so the quantile statistics are descriptive.
 }
+\references{
+Pesaran, M.H., Shin, Y. and Smith, R.J. (2001). Bounds testing approaches to
+the analysis of level relationships. \emph{Journal of Applied Econometrics},
+16(3), 289-326. \doi{10.1002/jae.616}
+
+Cho, J.S., Kim, T. and Shin, Y. (2015). Quantile cointegration in the
+autoregressive distributed-lag modeling framework. \emph{Journal of
+Econometrics}, 188(1), 281-300. \doi{10.1016/j.jeconom.2015.05.003}
 }

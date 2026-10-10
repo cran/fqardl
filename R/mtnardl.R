@@ -4,37 +4,77 @@
 # R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
 # =============================================================================
 
-#' Multi-Threshold NARDL Estimation
+#' Multi-Threshold NARDL Estimation (deprecated)
 #'
 #' @description
-#' Estimates NARDL model with multiple thresholds for more nuanced
-#' asymmetric analysis. Allows decomposition into multiple regimes
-#' (e.g., small positive, large positive, small negative, large negative).
+#' \strong{Deprecated.} \code{fqardl::mtnardl()} is deprecated and will be
+#' removed in fqardl 2.0.0; use \code{ardlverse::mtnardl()}. The first call
+#' in a session gives a warning. The conventions differ: the lag order p of
+#' \code{ardlverse::mtnardl()} equals p - 1 here (here p counts the lagged
+#' level of y together with the p - 1 lagged differences), and the
+#' thresholds are a single numeric vector there (a named list here).
+#'
+#' Estimates the NARDL model with the changes of each decomposed regressor
+#' split at threshold 0 into positive and negative partial sums.
+#'
+#' @details
+#' \strong{Changes in 1.1.0.}
+#' \itemize{
+#'   \item The bounds F statistic uses only the lagged level of y and the
+#'     lagged levels of the regressors (partial sums and undecomposed
+#'     variables), with k equal to the number of level regressors. Up to
+#'     1.0.6 every coefficient whose name ended in \code{_lag1} entered the
+#'     test, including \code{dy_lag1} and the lagged differences, and the
+#'     table was read at the wrong k. When the selected p or q exceeds 1 the
+#'     F statistic, the bounds and the verdict therefore differ from 1.0.6.
+#'   \item Thresholds other than 0 give an error: the multi-threshold
+#'     decomposition of earlier versions did not allocate the changes
+#'     correctly (the regime pieces did not sum to the change of the
+#'     variable).
+#'   \item Only \code{case = 3} is supported; other cases give an error
+#'     instead of being silently replaced by case 3.
+#'   \item The returned object has class \code{c("fqardl_mtnardl",
+#'     "mtnardl")} and the print and summary methods are registered for
+#'     \code{"fqardl_mtnardl"} only, so that they no longer mask the methods
+#'     of ardlverse.
+#' }
+#' The bounds are those of Pesaran, Shin and Smith (2001), Table CI(iii), at
+#' k equal to the number of level regressors. This choice of k for partial
+#' sums is a package choice, pending verification against Shin, Yu and
+#' Greenwood-Nimmo (2014) and Pal and Mitra (2016).
 #'
 #' @param formula A formula of the form y ~ x1 + x2 + ...
 #' @param data Data frame with time series
-#' @param decompose Variables to decompose with thresholds
-#' @param thresholds Named list of threshold values for each variable
+#' @param decompose Variables to decompose
+#' @param thresholds Named list of threshold values for each variable; only
+#'   0 is supported since 1.1.0.
 #' @param max_p Maximum lag for dependent variable
 #' @param max_q Maximum lag for independent variables
 #' @param criterion Information criterion ("AIC", "BIC", "HQ")
-#' @param case Model case (1-5)
+#' @param case Model case; only 3 (unrestricted intercept, no trend) is
+#'   supported.
+#' @param verbose Logical. Print progress messages (default: TRUE)
 #'
-#' @return Object of class "mtnardl"
+#' @references
+#' Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling asymmetric
+#' cointegration and dynamic multipliers in a nonlinear ARDL framework. In
+#' \emph{Festschrift in Honor of Peter Schmidt}, 281-314. Springer, New
+#' York. \doi{10.1007/978-1-4899-8008-3_9}
+#'
+#' @return Object of class \code{c("fqardl_mtnardl", "mtnardl")}
 #'
 #' @examples
 #' \donttest{
-#' result <- mtnardl(
+#' result <- suppressWarnings(mtnardl(
 #'   formula = gdp ~ oil_price,
-#'   data = macro_data,
+#'   data = oil_gdp_data,
 #'   decompose = "oil_price",
-#'   thresholds = list(oil_price = c(-5, 0, 5)),
-#'   max_p = 4, max_q = 4
-#' )
+#'   max_p = 2, max_q = 2,
+#'   verbose = FALSE
+#' ))
 #' summary(result)
 #' }
 #'
-#' @param verbose Logical. Print progress messages (default: TRUE)
 #' @export
 mtnardl <- function(formula, data,
                     decompose = NULL,
@@ -45,7 +85,13 @@ mtnardl <- function(formula, data,
                     case = 3,
                     verbose = TRUE) {
   
+  mtnardl_deprecation_warning()
   criterion <- match.arg(criterion)
+  if (!identical(as.numeric(case), 3))
+    stop("fqardl::mtnardl() supports only case = 3 (unrestricted intercept, ",
+         "no trend). Up to 1.0.6 other cases were silently replaced by case 3 ",
+         "in the lag selection and the bounds test. ardlverse::mtnardl() ",
+         "supports cases 1 to 5.", call. = FALSE)
   
   # Extract variables
   vars <- all.vars(formula)
@@ -61,6 +107,7 @@ mtnardl <- function(formula, data,
     thresholds <- lapply(decompose, function(v) 0)
     names(thresholds) <- decompose
   }
+  for (var in decompose) check_mtnardl_thresholds(thresholds[[var]])
   
   # Extract data
   y <- data[[y_name]]
@@ -156,26 +203,62 @@ mtnardl <- function(formula, data,
     bounds_test = bounds
   )
   
-  class(result) <- "mtnardl"
+  class(result) <- c("fqardl_mtnardl", "mtnardl")
   return(result)
+}
+
+
+# Once-per-session deprecation warning of fqardl::mtnardl()
+.fqardl_state <- new.env(parent = emptyenv())
+
+mtnardl_deprecation_warning <- function() {
+  if (isTRUE(.fqardl_state$mtnardl_warned)) return(invisible(FALSE))
+  .fqardl_state$mtnardl_warned <- TRUE
+  warning(
+    "fqardl::mtnardl() is deprecated and will be removed in fqardl 2.0.0; ",
+    "use ardlverse::mtnardl(). Conventions differ: p in ardlverse equals ",
+    "p - 1 here, and thresholds are a single numeric vector there (a named ",
+    "list here). Results changed in fqardl 1.1.0: the bounds F statistic was ",
+    "computed incorrectly when p or q exceeded 1 and now differs; thresholds ",
+    "other than 0 and cases other than 3 give an error. ",
+    "This warning is shown once per session.", call. = FALSE)
+  invisible(TRUE)
+}
+
+# Thresholds other than 0 are refused (the old decomposition was wrong)
+check_mtnardl_thresholds <- function(thresholds) {
+  th <- sort(unique(c(thresholds, 0)))
+  if (length(th) > 1)
+    stop("Thresholds other than 0 are not supported since fqardl 1.1.0 (got: ",
+         paste(thresholds, collapse = ", "), "). The multi-threshold ",
+         "decomposition of fqardl <= 1.0.6 was mathematically wrong: the regime ",
+         "pieces did not sum to the change of the variable. Use ",
+         "ardlverse::mtnardl() for several thresholds.", call. = FALSE)
+  invisible(th)
 }
 
 
 #' Multi-Threshold Decomposition
 #'
 #' @description
-#' Decomposes a variable into multiple regimes based on thresholds.
+#' Decomposes a variable into partial sums of its positive and negative
+#' changes (threshold 0), starting at zero in the first observation.
+#'
+#' Since 1.1.0 thresholds other than 0 give an error: the multi-threshold
+#' allocation of earlier versions was wrong (for example, with thresholds
+#' -2, 0 and 2 a change of -1 was split into pieces that did not sum to -1).
+#' Use \code{ardlverse::mtnardl()} for several thresholds.
 #'
 #' @param x Numeric vector
-#' @param thresholds Threshold values (must include 0)
+#' @param thresholds Threshold values; only 0 is supported.
 #'
 #' @return List with regime components and names
 #'
 #' @export
 decompose_multi_threshold <- function(x, thresholds) {
   
-  # Ensure 0 is included and sort
-  thresholds <- sort(unique(c(thresholds, 0)))
+  # Ensure 0 is included and sort; only 0 is supported since 1.1.0
+  thresholds <- check_mtnardl_thresholds(thresholds)
   
   n <- length(x)
   dx <- c(0, diff(x))
@@ -402,7 +485,8 @@ estimate_mtnardl <- function(y, X, p, q, case) {
     hq = hq,
     n = n_eff,
     model = model,
-    vcov = vcov(model)
+    vcov = vcov(model),
+    level_names = paste0(colnames(X), "_lag1")
   ))
 }
 
@@ -499,26 +583,46 @@ test_regime_asymmetry <- function(model_result, decompose, regime_names) {
 
 #' MTNARDL Bounds Test
 #'
+#' Wald bounds F statistic on the lagged level of y and the lagged levels of
+#' the regressors, with k equal to the number of level regressors (package
+#' choice, pending verification against Shin, Yu and Greenwood-Nimmo 2014
+#' and Pal and Mitra 2016). Corrected in 1.1.0: earlier versions included
+#' every coefficient whose name ended in \code{_lag1} (also \code{dy_lag1}
+#' and the lagged differences of the regressors).
+#'
+#' @param model_result Output of \code{estimate_mtnardl}.
+#' @param n Sample size.
+#' @param k Number of level regressors (used when the design does not record
+#'   them).
+#' @param case Model case; only 3 is supported.
+#' @return A list with \code{F_stat}, \code{t_stat}, \code{k}, the 5
+#'   percent bounds and the F-based \code{decision}.
 #' @keywords internal
 perform_mtnardl_bounds <- function(model_result, n, k, case) {
   
+  if (!identical(as.numeric(case), 3))
+    stop("Only case = 3 is supported.", call. = FALSE)
   coefs <- model_result$coefficients
   t_stats <- model_result$t_statistics
   
-  level_names <- grep("_lag1$", names(coefs), value = TRUE)
-  t_levels <- t_stats[level_names]
+  # CORRECTED in 1.1.0: only y_lag1 and the lagged levels of the regressors.
+  x_lev <- model_result$level_names
+  if (is.null(x_lev))
+    x_lev <- setdiff(grep("_lag1$", names(coefs), value = TRUE),
+                     c("y_lag1", grep("^(dy_lag|d_)", names(coefs), value = TRUE)))
+  level_names <- c("y_lag1", x_lev)
   
-  # CORRECTED in 1.0.3: a genuine Wald statistic, not mean(t^2), and the
-  # critical values now come from the PSS table for the actual number of
-  # level terms rather than a hard-coded pair.
+  # CORRECTED in 1.0.3: a genuine Wald statistic, not mean(t^2).
   F_stat <- wald_bounds_F(coefs, model_result$vcov, level_names)
   t_phi  <- unname(t_stats["y_lag1"])
-  cv <- get_pss_critical_values(max(1L, length(level_names) - 1L), case = 3)
+  k_lev <- length(x_lev)
+  cv <- get_pss_critical_values(k_lev, case = 3)
   decision <- bounds_verdict(F_stat, cv$F_lower[2], cv$F_upper[2])
 
   return(list(
     F_stat   = F_stat,
     t_stat   = t_phi,          # was missing entirely in 1.0.2
+    k        = k_lev,
     cv_5     = c(cv$F_lower[2], cv$F_upper[2]),
     t_cv_5   = c(cv$t_lower[2], cv$t_upper[2]),
     decision = decision
@@ -526,10 +630,28 @@ perform_mtnardl_bounds <- function(model_result, n, k, case) {
 }
 
 
+#' Plot method for fqardl mtnardl objects
+#'
+#' fqardl provides no plot for its (deprecated) \code{mtnardl} objects. This
+#' method stops with an informative error instead of letting \code{plot()}
+#' dispatch, through the inherited class \code{"mtnardl"}, to a method of
+#' another package that expects a different object.
+#'
+#' @param x An object of class \code{"fqardl_mtnardl"}.
+#' @param ... Not used.
+#' @return Does not return; always an error.
 #' @export
-print.mtnardl <- function(x, ...) {
-  cat("\nMulti-Threshold NARDL Model\n")
-  cat("===========================\n")
+plot.fqardl_mtnardl <- function(x, ...) {
+  stop("No plot method for fqardl::mtnardl() results (deprecated). ",
+       "Use ardlverse::mtnardl(), whose objects have a plot method.",
+       call. = FALSE)
+}
+
+
+#' @export
+print.fqardl_mtnardl <- function(x, ...) {
+  cat("\nMulti-Threshold NARDL Model (fqardl, deprecated)\n")
+  cat("================================================\n")
   cat(sprintf("Dependent: %s\n", x$y_name))
   cat(sprintf("Decomposed: %s\n", paste(x$decompose, collapse = ", ")))
   for (var in x$decompose) {
@@ -546,7 +668,7 @@ print.mtnardl <- function(x, ...) {
 
 
 #' @export
-summary.mtnardl <- function(object, ...) {
+summary.fqardl_mtnardl <- function(object, ...) {
   cat("\n")
   cat("=================================================================\n")
   cat("     Multi-Threshold NARDL (MTNARDL) - Summary\n")

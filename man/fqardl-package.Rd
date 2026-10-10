@@ -10,10 +10,13 @@ Main functions:
 \itemize{
   \item \code{\link{fqardl}}: Fourier Quantile ARDL estimation
   \item \code{\link{fnardl}}: Fourier Nonlinear ARDL with asymmetry
-  \item \code{\link{mtnardl}}: Multi-Threshold NARDL
+  \item \code{\link{mtnardl}}: Multi-Threshold NARDL (deprecated, to be
+    removed in 2.0.0; use ardlverse::mtnardl)
   \item \code{\link{fourier_adf_test}}: Fourier ADF unit root test
   \item \code{\link{fourier_kpss_test}}: Fourier KPSS stationarity test
-  \item \code{\link{perform_bounds_test}}: PSS bounds testing
+  \item \code{\link{perform_bounds_test}}: Wald bounds statistics (no
+    analytical verdict with Fourier terms)
+  \item \code{\link{bootstrap_bounds_test}}: recursive bootstrap bounds test
 }
 }
 \author{
@@ -21,13 +24,13 @@ Muhammad Alkhalaf \email{contact@rufyqelngeh.com}
 
 }
 \references{
-Shin, Y., Yu, B., & Greenwood-Nimmo, M. (2014). Modelling Asymmetric 
+Shin, Y., Yu, B., and Greenwood-Nimmo, M. (2014). Modelling Asymmetric 
 Cointegration and Dynamic Multipliers in a Nonlinear ARDL Framework.
 
-Enders, W., & Lee, J. (2012). The flexible Fourier form and Dickey-Fuller 
+Enders, W., and Lee, J. (2012). The flexible Fourier form and Dickey-Fuller 
 type unit root tests.
 
-Pesaran, M. H., Shin, Y., & Smith, R. J. (2001). Bounds testing approaches 
+Pesaran, M. H., Shin, Y., and Smith, R. J. (2001). Bounds testing approaches 
 to the analysis of level relationships.
 }
 \keyword{package}

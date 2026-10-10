@@ -1,6 +1,6 @@
 # =============================================================================
 # Fourier Unit Root Tests
-# Based on Enders & Lee (2012) and Becker, Enders & Lee (2006)
+# Based on Enders and Lee (2012) and Becker, Enders and Lee (2006)
 # R implementation: Muhammad Alkhalaf (Rufyq Elngeh)
 # =============================================================================
 
@@ -8,13 +8,14 @@
 #'
 #' @description
 #' Tests for unit roots allowing for smooth structural breaks using
-#' Fourier approximation. Implements Enders & Lee (2012) methodology.
+#' Fourier approximation. Implements Enders and Lee (2012) methodology.
 #'
 #' @param y Numeric vector of time series data
 #' @param model Model specification: "c" (constant), "ct" (constant + trend)
 #' @param max_freq Maximum Fourier frequency to test (default: 3)
 #' @param max_lag Maximum lag for ADF (default: NULL, auto-select)
 #' @param criterion Lag selection criterion ("AIC", "BIC", "t-sig")
+#' @param verbose Logical. Print progress messages (default: TRUE)
 #'
 #' @return Object of class "fadf" with test results
 #'
@@ -27,7 +28,7 @@
 #' }
 #'
 #' @references
-#' Enders, W., & Lee, J. (2012). The flexible Fourier form and Dickey-Fuller
+#' Enders, W., and Lee, J. (2012). The flexible Fourier form and Dickey-Fuller
 #' type unit root tests. Economics Letters, 117(1), 196-199.
 #'
 #' @export
@@ -52,7 +53,7 @@ fourier_adf_test <- function(y, model = c("c", "ct"),
   if (verbose) {
     message("=================================================================")
     message("   Fourier ADF Unit Root Test")
-    message("   Enders & Lee (2012) Economics Letters")
+    message("   Enders and Lee (2012) Economics Letters")
     message("=================================================================\n")
   }
   
@@ -391,7 +392,7 @@ get_fadf_f_critical_values <- function(n, model) {
 
 #' @export
 print.fadf <- function(x, ...) {
-  cat("\nFourier ADF Test (Enders & Lee, 2012)\n")
+  cat("\nFourier ADF Test (Enders and Lee, 2012)\n")
   cat("=====================================\n")
   cat(sprintf("ADF Statistic: %.4f\n", x$statistic))
   cat(sprintf("Critical values 1%%/5%%/10%%: %.4f / %.4f / %.4f\n",
@@ -408,7 +409,7 @@ print.fadf <- function(x, ...) {
 #'
 #' @description
 #' Tests for stationarity allowing for smooth structural breaks.
-#' Implements Becker, Enders & Lee (2006) methodology.
+#' Implements Becker, Enders and Lee (2006) methodology.
 #'
 #' @param y Numeric vector of time series data
 #' @param model Model specification: "c" (constant), "ct" (constant + trend)
@@ -417,7 +418,7 @@ print.fadf <- function(x, ...) {
 #' @return Object of class "fkpss" with test results
 #'
 #' @references
-#' Becker, R., Enders, W., & Lee, J. (2006). A stationarity test in the presence
+#' Becker, R., Enders, W., and Lee, J. (2006). A stationarity test in the presence
 #' of an unknown number of smooth breaks. Journal of Time Series Analysis, 27(3), 381-409.
 #'
 #' @param verbose Logical. Print progress messages (default: TRUE)
@@ -433,7 +434,7 @@ fourier_kpss_test <- function(y, model = c("c", "ct"), max_freq = 3, verbose = T
   if (verbose) {
     message("=================================================================")
     message("   Fourier KPSS Stationarity Test")
-    message("   Becker, Enders & Lee (2006)")
+    message("   Becker, Enders and Lee (2006)")
     message("=================================================================\n")
   }
   
@@ -586,7 +587,7 @@ get_fkpss_critical_values <- function(model, k, n = 100) {
 
 
 print.fkpss <- function(x, ...) {
-  cat("\nFourier KPSS Test (Becker, Enders & Lee, 2006)\n")
+  cat("\nFourier KPSS Test (Becker, Enders and Lee, 2006)\n")
   cat("==============================================\n")
   cat(sprintf("KPSS Statistic: %.6f\n", x$statistic))
   cat(sprintf("Critical values 1%%/5%%/10%%: %.4f / %.4f / %.4f\n",

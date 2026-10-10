@@ -7,7 +7,7 @@
 #'
 #' @description
 #' Creates sine and cosine terms for Fourier approximation of structural breaks.
-#' Based on Enders & Lee (2012) methodology.
+#' Based on Enders and Lee (2012) methodology.
 #'
 #' @param n Sample size (number of observations)
 #' @param k Fourier frequency (integer >= 1)

@@ -9,11 +9,17 @@ decompose_multi_threshold(x, thresholds)
 \arguments{
 \item{x}{Numeric vector}
 
-\item{thresholds}{Threshold values (must include 0)}
+\item{thresholds}{Threshold values; only 0 is supported.}
 }
 \value{
 List with regime components and names
 }
 \description{
-Decomposes a variable into multiple regimes based on thresholds.
+Decomposes a variable into partial sums of its positive and negative
+changes (threshold 0), starting at zero in the first observation.
+
+Since 1.1.0 thresholds other than 0 give an error: the multi-threshold
+allocation of earlier versions was wrong (for example, with thresholds
+-2, 0 and 2 a change of -1 was split into pieces that did not sum to -1).
+Use \code{ardlverse::mtnardl()} for several thresholds.
 }

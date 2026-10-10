@@ -2,29 +2,32 @@ Package: fqardl
 Type: Package
 Title: Fourier ARDL Methods: Quantile, Nonlinear, Multi-Threshold &
         Unit Root Tests
-Version: 1.0.6
-Date: 2026-09-28
+Version: 1.1.0
+Date: 2026-10-03
 Maintainer: Muhammad Alkhalaf <muhammedalkhalaf@gmail.com>
 Authors@R: c(
     person("Muhammad", "Alkhalaf", 
            email = "muhammedalkhalaf@gmail.com", 
            role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0009-0002-2677-9246")))
-Description: Comprehensive implementation of advanced ARDL methodologies for 
-    cointegration analysis with structural breaks and asymmetric effects.
-    Includes: (1) Fourier Quantile ARDL (FQARDL) - quantile regression with 
-    Fourier approximation for analyzing relationships across the conditional 
-    distribution; (2) Fourier Nonlinear ARDL (FNARDL) - asymmetric cointegration 
-    with partial sum decomposition following Shin, Yu & Greenwood-Nimmo (2014) 
-    <doi:10.1007/978-1-4899-8008-3_9>; (3) Multi-Threshold NARDL (MTNARDL) - 
-    multiple regime asymmetry analysis; (4) Fourier Unit Root Tests - ADF and 
-    KPSS tests with Fourier terms following Enders & Lee (2012) 
-    <doi:10.1016/j.econlet.2012.04.081> and Becker, Enders & Lee (2006) 
-    <doi:10.1111/j.1467-9892.2006.00478.x>. Features automatic lag and frequency 
-    selection, PSS bounds testing following Pesaran, Shin & Smith (2001) 
-    <doi:10.1002/jae.616>, bootstrap cointegration tests, Wald tests for 
-    asymmetry, dynamic multiplier computation, and publication-ready 
-    visualizations.
+Description: Implementation of ARDL methods for cointegration analysis with
+    structural breaks and asymmetric effects. Includes: (1) Fourier Quantile
+    ARDL (FQARDL), quantile regression with Fourier approximation following
+    the quantile ARDL of Cho, Kim and Shin (2015)
+    <doi:10.1016/j.jeconom.2015.05.003>; (2) Fourier Nonlinear ARDL (FNARDL),
+    asymmetric cointegration with partial sum decomposition following Shin,
+    Yu and Greenwood-Nimmo (2014) <doi:10.1007/978-1-4899-8008-3_9>;
+    (3) a deprecated Multi-Threshold NARDL (MTNARDL) function; (4) Fourier
+    unit root tests, ADF and KPSS tests with Fourier terms following Enders
+    and Lee (2012) <doi:10.1016/j.econlet.2012.04.081> and Becker, Enders and
+    Lee (2006) <doi:10.1111/j.1467-9892.2006.00478.x>. Features automatic lag
+    and frequency selection, Wald bounds statistics with the tables of
+    Pesaran, Shin and Smith (2001) <doi:10.1002/jae.616> (no verdict with
+    Fourier terms, for which the tables are not valid), recursive bootstrap
+    bounds tests following Bertelli, Vacca and Zoia (2022)
+    <doi:10.1016/j.econmod.2022.105987> and McNown, Sam and Goh (2018)
+    <doi:10.1080/00036846.2017.1366643>, Wald tests for asymmetry,
+    multiplier computation, and visualizations.
 License: GPL-3
 URL: https://github.com/muhammedalkhalaf/fqardl
 BugReports: https://github.com/muhammedalkhalaf/fqardl/issues
@@ -36,8 +39,8 @@ Suggests: testthat (>= 3.0.0), knitr, rmarkdown, plotly, covr
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-09-28 17:39:05 UTC; root
+Packaged: 2026-10-03 16:33:34 UTC; root
 Author: Muhammad Alkhalaf [aut, cre, cph] (ORCID:
     <https://orcid.org/0009-0002-2677-9246>)
 Repository: CRAN
-Date/Publication: 2026-09-30 21:20:44 UTC
+Date/Publication: 2026-10-10 08:00:02 UTC

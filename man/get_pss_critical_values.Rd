@@ -2,19 +2,27 @@
 % Please edit documentation in R/bounds_test.R
 \name{get_pss_critical_values}
 \alias{get_pss_critical_values}
-\title{Get PSS Critical Values}
+\title{PSS (2001) Critical Values, Case III}
 \usage{
 get_pss_critical_values(k, case = 3)
 }
 \arguments{
-\item{k}{Number of regressors (excluding the dependent variable)}
+\item{k}{Number of regressors, excluding the dependent variable.}
 
-\item{case}{Model case (1-5)}
+\item{case}{Deterministic case. Only 3 is supported.}
 }
 \value{
-Data frame with critical values
+A list with \code{F_lower}, \code{F_upper}, \code{t_lower},
+  \code{t_upper} and \code{significance}.
 }
 \description{
-Returns critical values from Pesaran, Shin & Smith (2001) Table CI.
+Table CI(iii) for the F statistic and Table CII(iii) for the t statistic,
+unrestricted intercept and no trend. Values are the 1 percent, 5 percent and
+10 percent points, each with an I(0) lower and an I(1) upper bound.
+
+In Table CII the I(0) bound does not depend on k.
+}
+\references{
+Pesaran, M.H., Shin, Y. and Smith, R.J. (2001), Tables CI(iii) and CII(iii).
 }
 \keyword{internal}

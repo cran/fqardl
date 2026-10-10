@@ -18,7 +18,7 @@ A matrix with sine and cosine columns
 }
 \description{
 Creates sine and cosine terms for Fourier approximation of structural breaks.
-Based on Enders & Lee (2012) methodology.
+Based on Enders and Lee (2012) methodology.
 }
 \details{
 The Fourier terms are computed as:

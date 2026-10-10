@@ -129,7 +129,7 @@ test_that("the shipped critical values match PSS Tables CI(iii) and CII(iii) at 
 test_that("mtnardl returns a t statistic and a negative ECT", {
   data(oil_gdp_data, package = "fqardl")
   set.seed(11)
-  mt <- mtnardl(gdp ~ oil_price, data = oil_gdp_data, verbose = FALSE)
+  mt <- suppressWarnings(mtnardl(gdp ~ oil_price, data = oil_gdp_data, verbose = FALSE))
   expect_true(is.finite(mt$bounds_test$t_stat))
   expect_lt(unname(mt$model$coefficients["y_lag1"]), 0)
 })

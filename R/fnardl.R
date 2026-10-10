@@ -18,10 +18,43 @@
 #' @param max_q Maximum lag for independent variables
 #' @param max_k Maximum Fourier frequency
 #' @param criterion Information criterion ("AIC", "BIC", "HQ")
-#' @param case Model case (1-5)
-#' @param bootstrap Perform bootstrap test
+#' @param case Model case; only 3 (unrestricted intercept, no trend) is
+#'   supported.
+#' @param bootstrap Perform the recursive bootstrap bounds test
+#'   (see Details).
 #' @param n_boot Number of bootstrap replications
 #' @param verbose Logical. Print progress messages (default: TRUE)
+#' @param fourier_k Optional Fourier frequency fixed by the user in advance;
+#'   \code{NULL} (default) selects it from \code{1:max_k} and the bootstrap
+#'   re-selects it in every replication.
+#' @param boot_scheme \code{"bvz"} (default) or \code{"mcnown"}; see
+#'   \code{\link{bootstrap_bounds_test}}.
+#' @param seed Optional seed for the bootstrap; the caller's random number
+#'   state is restored afterwards.
+#'
+#' @details
+#' The positive and negative partial sums start at zero in the first
+#' observation (\code{decompose_variables}). The regression always contains
+#' Fourier terms, for which the Pesaran, Shin and Smith (2001) bounds are not
+#' valid: since 1.1.0 \code{bounds_test} reports the F, t and Find
+#' statistics with the bounds labelled as the bounds for the model without
+#' Fourier terms, not valid with Fourier terms, and no analytical verdict.
+#' With \code{bootstrap = TRUE} the recursive bootstrap generates x* and
+#' y*, rebuilds the partial sums from x*, holds the Fourier terms fixed,
+#' re-selects the Fourier frequency (unless \code{fourier_k} is given) and
+#' the lag orders in every replication (a package choice; Bertelli, Vacca
+#' and Zoia 2022 do not discuss re-selection), and combines the three tests with
+#' the AND rule (cointegration only if Fov, t and Find all reject).
+#'
+#' @references
+#' Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling asymmetric
+#' cointegration and dynamic multipliers in a nonlinear ARDL framework. In
+#' \emph{Festschrift in Honor of Peter Schmidt}, 281-314. Springer, New
+#' York. \doi{10.1007/978-1-4899-8008-3_9}
+#'
+#' Bertelli, S., Vacca, G. and Zoia, M. (2022). Bootstrap cointegration tests
+#' in ARDL models. \emph{Economic Modelling}, 116, 105987.
+#' \doi{10.1016/j.econmod.2022.105987}
 #'
 #' @return An object of class "fnardl"
 #'
@@ -48,9 +81,16 @@ fnardl <- function(formula, data,
                    case = 3,
                    bootstrap = FALSE,
                    n_boot = 1000,
-                   verbose = TRUE) {
+                   verbose = TRUE,
+                   fourier_k = NULL,
+                   boot_scheme = c("bvz", "mcnown"),
+                   seed = NULL) {
   
   criterion <- match.arg(criterion)
+  boot_scheme <- match.arg(boot_scheme)
+  if (!is.null(fourier_k) &&
+      (length(fourier_k) != 1 || fourier_k < 1 || fourier_k != round(fourier_k)))
+    stop("'fourier_k' must be a single positive integer", call. = FALSE)
   
   # Extract variables
   vars <- all.vars(formula)
@@ -90,9 +130,14 @@ if (is.null(decompose)) {
   
   # Step 3: Select optimal Fourier frequency
   if (verbose) message("Step 2: Selecting optimal Fourier frequency...")
-  k_results <- select_fourier_frequency(y, X_full, max_k, criterion)
-  optimal_k <- k_results$optimal_k
-  if (verbose) message(sprintf("   Optimal k = %d\n", optimal_k))
+  if (is.null(fourier_k)) {
+    k_results <- select_fourier_frequency(y, X_full, max_k, criterion)
+    optimal_k <- k_results$optimal_k
+    if (verbose) message(sprintf("   Optimal k = %d\n", optimal_k))
+  } else {
+    optimal_k <- as.integer(fourier_k)
+    if (verbose) message(sprintf("   k = %d (fixed by the user)\n", optimal_k))
+  }
   
   # Step 4: Generate Fourier terms
   fourier_terms <- generate_fourier_terms(n, optimal_k)
@@ -142,6 +187,8 @@ if (is.null(decompose)) {
   # Step 9: Bounds test
   if (verbose) message("Step 7: Bounds test for cointegration...")
   bounds_result <- perform_nardl_bounds_test(nardl_result, n, length(x_names_full), case)
+  if (!bootstrap && isFALSE(bounds_result$bounds_valid))
+    bounds_result$decision <- paste0(bounds_result$decision, fourier_boot_advice)
   if (verbose) {
     message(sprintf("   F-statistic: %.4f", bounds_result$F_stat))
     message(sprintf("   Decision: %s\n", bounds_result$decision))
@@ -152,9 +199,18 @@ if (is.null(decompose)) {
   if (bootstrap) {
     if (verbose) message("Step 8: Bootstrap cointegration test...")
     bootstrap_results <- bootstrap_nardl(
-      y, X_full, fourier_terms, optimal_p, optimal_q, case, n_boot
+      y, as.matrix(data[, x_names, drop = FALSE]), x_names, decompose,
+      fourier_terms, optimal_p, optimal_q, case, n_boot,
+      reselect = list(k = fourier_k, max_k = max_k, max_p = max_p,
+                      max_q = max_q, criterion = criterion),
+      scheme = boot_scheme, seed = seed
     )
-    if (verbose) message(sprintf("   Bootstrap p-value: %.4f\n", bootstrap_results$p_value))
+    if (verbose) {
+      message(sprintf("   Bootstrap p-values: Fov = %.4f, t = %.4f, Find = %.4f",
+                      bootstrap_results$p_value_F, bootstrap_results$p_value_t,
+                      bootstrap_results$p_value_Find))
+      message(sprintf("   Decision: %s\n", bootstrap_results$label))
+    }
   }
   
   if (verbose) {
@@ -274,6 +330,58 @@ build_nardl_regressors <- function(data, x_names, decompose, decomposed_data) {
 #'
 #' @keywords internal
 estimate_nardl <- function(y, X, fourier, p, q, case = 3) {
+
+  d <- build_nardl_design(y, X, fourier, p, q)
+  y_adj <- d$y
+  X_design <- d$X
+  col_names <- colnames(X_design)
+  n_eff <- d$n
+
+  # Estimate OLS
+  model <- lm(y_adj ~ X_design - 1)
+  
+  # Extract results
+  coefs <- coef(model)
+  names(coefs) <- col_names
+  
+  summary_model <- summary(model)
+  se <- summary_model$coefficients[, 2]
+  t_stats <- summary_model$coefficients[, 3]
+  p_values <- summary_model$coefficients[, 4]
+  
+  names(se) <- names(t_stats) <- names(p_values) <- col_names
+  
+  return(list(
+    coefficients = coefs,
+    std_errors = se,
+    t_statistics = t_stats,
+    p_values = p_values,
+    fitted = fitted(model),
+    residuals = residuals(model),
+    r_squared = summary_model$r.squared,
+    adj_r_squared = summary_model$adj.r.squared,
+    sigma = summary_model$sigma,
+    df = summary_model$df,
+    n = n_eff,
+    model = model,
+    design = list(y = y_adj, X = X_design),
+    level_names = d$level_names
+  ))
+}
+
+
+#' Build the FNARDL Design Matrix
+#'
+#' Conditional ECM design of \code{estimate_nardl}: intercept, lagged level
+#' of y, lagged differences of y, lagged levels of the regressors, current
+#' and lagged differences of the regressors, Fourier terms.
+#'
+#' @inheritParams estimate_nardl
+#' @return List with \code{y} (the differenced dependent variable),
+#'   \code{X} (design matrix), \code{n} and \code{level_names} (the
+#'   lagged-level columns of the regressors).
+#' @keywords internal
+build_nardl_design <- function(y, X, fourier, p, q) {
   
   n <- length(y)
   k <- ncol(X)
@@ -355,35 +463,8 @@ estimate_nardl <- function(y, X, fourier, p, q, case = 3) {
   X_design <- do.call(cbind, design_list)
   colnames(X_design) <- col_names
   
-  # Estimate OLS
-  model <- lm(y_adj ~ X_design - 1)
-  
-  # Extract results
-  coefs <- coef(model)
-  names(coefs) <- col_names
-  
-  summary_model <- summary(model)
-  se <- summary_model$coefficients[, 2]
-  t_stats <- summary_model$coefficients[, 3]
-  p_values <- summary_model$coefficients[, 4]
-  
-  names(se) <- names(t_stats) <- names(p_values) <- col_names
-  
-  return(list(
-    coefficients = coefs,
-    std_errors = se,
-    t_statistics = t_stats,
-    p_values = p_values,
-    fitted = fitted(model),
-    residuals = residuals(model),
-    r_squared = summary_model$r.squared,
-    adj_r_squared = summary_model$adj.r.squared,
-    sigma = summary_model$sigma,
-    df = summary_model$df,
-    n = n_eff,
-    model = model,
-    design = list(y = y_adj, X = X_design)
-  ))
+  list(y = y_adj, X = X_design, n = n_eff,
+       level_names = paste0(colnames(X), "_lag1"))
 }
 
 
@@ -493,72 +574,152 @@ test_asymmetry <- function(nardl_result, decompose) {
 
 #' NARDL Bounds Test
 #'
+#' Wald bounds statistics of the FNARDL model. The overall F statistic tests
+#' the lagged level of y and the lagged levels of the regressors (partial
+#' sums and undecomposed variables); k is the number of level regressors.
+#' Up to 1.0.6 the F statistic also included the lagged differences
+#' \code{dy_lag1} and \code{d_*_lag1} whenever p or q exceeded 1.
+#'
+#' With Fourier terms in the regression (always the case for models estimated
+#' by \code{fnardl}) the PSS (2001) bounds do not apply (Monte Carlo
+#' evidence): no analytical verdict is given
+#' and the PSS bounds are returned only for reference, labelled as the bounds
+#' for the model without Fourier terms, not valid with Fourier terms. Use the
+#' recursive bootstrap (\code{fnardl(..., bootstrap = TRUE)}).
+#'
+#' @param nardl_result Output of \code{estimate_nardl}.
+#' @param n Sample size.
+#' @param k Number of level regressors (used when the design does not record
+#'   them).
+#' @param case Model case; only 3 is supported.
+#' @return A list with \code{F_stat}, \code{t_stat}, \code{Find_stat},
+#'   \code{k}, the 5 percent bounds \code{cv_5} and \code{t_cv_5},
+#'   \code{bounds_valid}, \code{bounds_note} and \code{decision}.
 #' @keywords internal
 perform_nardl_bounds_test <- function(nardl_result, n, k, case) {
-  # Use same logic as regular bounds test
   coefs <- nardl_result$coefficients
   t_stats <- nardl_result$t_statistics
+  nms <- names(coefs)
+
+  # CORRECTED in 1.1.0: only the lagged levels of the regressors, not every
+  # coefficient whose name ends in "_lag1".
+  x_lev <- nardl_result$level_names
+  if (is.null(x_lev))
+    x_lev <- setdiff(grep("_lag1$", nms, value = TRUE),
+                     c("y_lag1", grep("^(dy_lag|d_)", nms, value = TRUE)))
+  level_names <- c("y_lag1", x_lev)
   
-  # Get lagged level coefficients
-  level_names <- grep("_lag1$", names(coefs), value = TRUE)
-  t_stats_levels <- t_stats[level_names]
-  
-  # CORRECTED in 1.0.3: a genuine Wald statistic, not mean(t^2).
   V <- tryCatch(stats::vcov(nardl_result$model), error = function(e) NULL)
-  if (!is.null(V)) dimnames(V) <- list(names(coefs), names(coefs))
+  if (!is.null(V)) dimnames(V) <- list(nms, nms)
   F_stat <- wald_bounds_F(coefs, V, level_names)
+  Find_stat <- wald_bounds_F(coefs, V, x_lev)
   t_phi <- unname(t_stats["y_lag1"])
   
-  # Get critical values
-  cv <- get_pss_critical_values(length(level_names) - 1, case)
+  k_lev <- length(x_lev)
+  cv <- get_pss_critical_values(k_lev, case)
+  fourier <- has_fourier_terms(nms)
   
-  # Three-way verdict; the inconclusive region is part of the procedure.
-  decision <- bounds_verdict(F_stat, cv$F_lower[2], cv$F_upper[2])
+  decision <- if (fourier) fourier_no_verdict else
+    bounds_verdict(F_stat, cv$F_lower[2], cv$F_upper[2])
   
   return(list(
     F_stat = F_stat,
     t_stat = t_phi,
+    Find_stat = Find_stat,
+    k = k_lev,
     cv_5 = c(cv$F_lower[2], cv$F_upper[2]),
+    t_cv_5 = c(cv$t_lower[2], cv$t_upper[2]),
+    bounds_valid = !fourier,
+    bounds_note = if (fourier) fourier_bounds_note else
+                    "PSS (2001) Table CI(iii), 5 percent",
     decision = decision
   ))
 }
 
 
+# Partial-sum decomposition of fnardl as a function of the regressor matrix,
+# with its one-step form for the bootstrap engine.
+.fn_decomposer <- function(x_names, decompose) {
+  full <- function(x) {
+    x <- as.matrix(x)
+    colnames(x) <- x_names
+    df <- as.data.frame(x)
+    X <- build_nardl_regressors(df, x_names, decompose,
+                                decompose_variables(df, decompose))
+    as.matrix(X)
+  }
+  isdec <- x_names %in% decompose
+  step <- function(dx) {
+    unlist(lapply(seq_along(dx), function(j)
+      if (isdec[j]) c(max(dx[j], 0), min(dx[j], 0)) else dx[j]))
+  }
+  list(full = full, step = step)
+}
+
+# Statistics of fnardl's ECM (build_nardl_design), estimated by OLS
+.fn_stats <- function(y, x, spec, dec) {
+  Xf <- dec$full(x)
+  d <- build_nardl_design(y, Xf, .fq_spec_fourier(spec, length(y)), spec$p, spec$q)
+  .fq_ols_stats(d$y, d$X, "y_lag1", d$level_names)
+}
+
+
 #' Bootstrap NARDL Test
 #'
+#' Recursive bootstrap bounds test for the FNARDL model (rewritten in
+#' 1.1.0). The regressors x are generated recursively and the partial sums
+#' are rebuilt from x* with \code{decompose_variables}; the Fourier terms are
+#' fixed deterministic regressors; the statistics (Fov, t, Find) are OLS
+#' statistics of fnardl's own design; the Fourier frequency (unless fixed)
+#' and the lag orders are re-selected in every replication when
+#' \code{reselect} is given (a package choice); the decision is the AND rule. See
+#' \code{\link{bootstrap_bounds_test}} for the schemes. Up to 1.0.6 this
+#' function regressed a new Gaussian random walk on fixed regressors and
+#' reported the t test only, without a warning.
+#'
+#' @param y Dependent variable.
+#' @param x Matrix of the original regressors (columns \code{x_names}).
+#' @param x_names Names of the regressors.
+#' @param decompose Names of the decomposed regressors.
+#' @param fourier Fourier terms of the observed model.
+#' @param p,q Lag orders as in \code{estimate_nardl}.
+#' @param case Model case; only 3 is supported.
+#' @param n_boot Number of bootstrap replications.
+#' @param reselect \code{NULL} or a list (\code{max_k}, \code{max_p},
+#'   \code{max_q}, \code{criterion}, optional \code{k}); see
+#'   \code{\link{bootstrap_bounds_test}}.
+#' @param scheme \code{"bvz"} or \code{"mcnown"}.
+#' @param level Significance level of the decision.
+#' @param seed Optional seed; the caller's random number state is restored.
+#' @return A list as returned by \code{\link{bootstrap_bounds_test}};
+#'   \code{p_value} is the p-value of the t test (as in 1.0.6).
 #' @keywords internal
-bootstrap_nardl <- function(y, X, fourier, p, q, case, n_boot) {
-  
-  n <- length(y)
-  
-  # Original test statistic
-  orig <- estimate_nardl(y, X, fourier, p, q, case)
-  orig_t <- orig$t_statistics["y_lag1"]
-  
-  boot_t <- numeric(n_boot)
-  
-  for (b in 1:n_boot) {
-    # Generate I(1) process
-    y_boot <- cumsum(rnorm(n, sd = sd(diff(y))))
-    
-    tryCatch({
-      boot_res <- estimate_nardl(y_boot, X, fourier, p, q, case)
-      boot_t[b] <- boot_res$t_statistics["y_lag1"]
-    }, error = function(e) {
-      boot_t[b] <- NA
-    })
-    
-    # Progress is suppressed for CRAN compliance
-  }
-  
-  boot_t <- boot_t[!is.na(boot_t)]
-  p_value <- mean(boot_t <= orig_t)
-  
-  return(list(
-    n_boot = n_boot,
-    p_value = p_value,
-    orig_t = orig_t
-  ))
+bootstrap_nardl <- function(y, x, x_names, decompose, fourier, p, q, case = 3,
+                            n_boot = 1000, reselect = NULL,
+                            scheme = c("bvz", "mcnown"), level = 0.05,
+                            seed = NULL) {
+  if (!identical(as.numeric(case), 3))
+    stop("Only case = 3 (unrestricted intercept, no trend) is supported.",
+         call. = FALSE)
+  scheme <- match.arg(scheme)
+  x <- as.matrix(x)
+  colnames(x) <- x_names
+  dec <- .fn_decomposer(x_names, decompose)
+  kw <- ncol(dec$full(x))
+  sc <- .fq_scheme(scheme)
+  spec <- list(fourier = as.matrix(fourier), p = p, q = q)
+  eng <- .ardl_boot_engine(
+    as.numeric(y), x, p = p - 1, q = rep(q - 1, kw), case = 3,
+    t0 = max(p, q) + 1, det = as.matrix(fourier), decompose = dec,
+    nulls = sc$nulls, xmodel = sc$xmodel, B = n_boot, init = sc$init,
+    recentre = sc$recentre,
+    stat_fun = function(yy, xx, sp) .fn_stats(yy, xx, sp, dec),
+    select = .fq_make_select(reselect, transform = dec$full),
+    spec = spec, use_find = TRUE, level = level, seed = seed)
+  out <- .fq_boot_result(eng, scheme, n_boot, reselect,
+                         model = "Fourier NARDL (conditional mean), fnardl design")
+  out$orig_t <- c(y_lag1 = out$orig_t)   # named as in 1.0.6
+  out
 }
 
 
@@ -580,6 +741,10 @@ print.fnardl <- function(x, ...) {
                 x$asymmetry_tests[[var]]$decision,
                 x$asymmetry_tests[[var]]$p_value))
   }
+  if (!is.null(x$bounds_test$decision))
+    cat(sprintf("\nBounds test: %s\n", x$bounds_test$decision))
+  if (!is.null(x$bootstrap$label))
+    cat(sprintf("Bootstrap bounds test: %s\n", x$bootstrap$label))
   invisible(x)
 }
 
@@ -601,8 +766,14 @@ summary.fnardl <- function(object, ...) {
   cat("ASYMMETRIC LONG-RUN MULTIPLIERS\n")
   cat("-------------------------------\n")
   for (var in object$decompose) {
-    cat(sprintf("%s(+): %.4f\n", var, object$multipliers$long_run_positive[var]))
-    cat(sprintf("%s(-): %.4f\n", var, object$multipliers$long_run_negative[var]))
+    # FIXED in 1.1.0 (printout only): the elements are named
+    # "<var>.<var>_pos_lag1" by unlist(), so indexing by <var> printed NA.
+    lrp <- object$multipliers$long_run_positive
+    lrn <- object$multipliers$long_run_negative
+    cat(sprintf("%s(+): %.4f\n", var,
+                unname(lrp[paste0(var, ".", var, "_pos_lag1")])))
+    cat(sprintf("%s(-): %.4f\n", var,
+                unname(lrn[paste0(var, ".", var, "_neg_lag1")])))
     cat(sprintf("  Asymmetry test: Wald = %.3f, p = %.4f (%s)\n\n",
                 object$asymmetry_tests[[var]]$wald_stat,
                 object$asymmetry_tests[[var]]$p_value,
@@ -611,8 +782,23 @@ summary.fnardl <- function(object, ...) {
   
   cat("BOUNDS TEST\n")
   cat("-----------\n")
-  cat(sprintf("F-stat: %.4f | Decision: %s\n\n", 
-              object$bounds_test$F_stat, object$bounds_test$decision))
+  cat(sprintf("F-stat: %.4f | t-stat: %.4f | Decision: %s\n",
+              object$bounds_test$F_stat, object$bounds_test$t_stat %||% NA_real_,
+              object$bounds_test$decision))
+  if (isFALSE(object$bounds_test$bounds_valid))
+    cat(sprintf("5%% PSS bounds: I(0) = %.3f, I(1) = %.3f. %s\n",
+                object$bounds_test$cv_5[1], object$bounds_test$cv_5[2],
+                fourier_bounds_note))
+  cat("\n")
+  if (!is.null(object$bootstrap)) {
+    cat("BOOTSTRAP BOUNDS TEST\n")
+    cat("---------------------\n")
+    if (is.null(object$bootstrap$engine))
+      cat(sprintf("Bootstrap p-value (t): %.4f\n", object$bootstrap$p_value))
+    else
+      .fq_print_boot(object$bootstrap)
+    cat("\n")
+  }
   
   cat("ERROR CORRECTION TERM\n")
   cat("---------------------\n")

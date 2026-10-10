@@ -31,7 +31,7 @@ Object of class "fadf" with test results
 }
 \description{
 Tests for unit roots allowing for smooth structural breaks using
-Fourier approximation. Implements Enders & Lee (2012) methodology.
+Fourier approximation. Implements Enders and Lee (2012) methodology.
 }
 \examples{
 \donttest{
@@ -43,6 +43,6 @@ print(result)
 
 }
 \references{
-Enders, W., & Lee, J. (2012). The flexible Fourier form and Dickey-Fuller
+Enders, W., and Lee, J. (2012). The flexible Fourier form and Dickey-Fuller
 type unit root tests. Economics Letters, 117(1), 196-199.
 }

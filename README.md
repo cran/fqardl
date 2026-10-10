@@ -4,6 +4,14 @@ Fourier ARDL methods for R: Fourier Quantile ARDL, Fourier Nonlinear ARDL, Multi
 
 CRAN: https://cran.r-project.org/package=fqardl
 
+## Changes in version 1.1.0
+
+* The bootstrap bounds tests of `fqardl(bootstrap = TRUE)` and `fnardl(bootstrap = TRUE)` are now recursive bootstraps (Bertelli, Vacca and Zoia 2022, or McNown, Sam and Goh 2018) with OLS conditional ECM statistics (Fov, t, Find), regressors and partial sums regenerated, Fourier terms held fixed, the Fourier frequency and lag orders re-selected in every replication, and the AND decision rule. The old scheme regressed a new Gaussian random walk on fixed regressors and declared cointegration when F or t rejected.
+* Models with Fourier terms get no analytical bounds verdict: the Pesaran, Shin and Smith bounds are not valid with Fourier terms.
+* `mtnardl()` is deprecated (removal in 2.0.0; use `ardlverse::mtnardl()`); its bounds F now uses only the lagged levels, thresholds other than 0 and cases other than 3 give an error.
+
+See NEWS.md for details and Monte Carlo evidence.
+
 ## Correctness notice for version 1.0.2 and earlier
 
 **If you have produced results with fqardl 1.0.2 or earlier, please re-run them with 1.0.3 before relying on them.**
@@ -29,7 +37,7 @@ On the package's own macro_data, the bounds statistic falls from F = 65.57, repo
 
 ### Still not fixed in 1.0.3
 
-These now emit a warning at the point of use and are scheduled for 2.0.0. The bootstrap does not generate pseudo-samples under the null. The cross-quantile Wald test assumes independence across quantiles and is therefore conservative. Quantile-specific bounds verdicts use critical values that Pesaran, Shin and Smith simulated for the conditional mean, so they should be read as descriptive.
+These now emit a warning at the point of use and are scheduled for 2.0.0. The bootstrap does not generate pseudo-samples under the null (corrected in 1.1.0). The cross-quantile Wald test assumes independence across quantiles and is therefore conservative. Quantile-specific bounds verdicts use critical values that Pesaran, Shin and Smith simulated for the conditional mean, so they should be read as descriptive.
 
 ### Verification
 

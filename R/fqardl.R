@@ -20,10 +20,36 @@
 #' @param max_q Maximum lag for independent variables (default: 4)
 #' @param max_k Maximum Fourier frequency to test (default: 3)
 #' @param criterion Information criterion for lag selection ("AIC", "BIC", "HQ")
-#' @param case Model case (1-5) following Pesaran et al. (2001)
-#' @param bootstrap Logical, perform bootstrap cointegration test
+#' @param case Model case; only 3 (unrestricted intercept, no trend) is
+#'   supported.
+#' @param bootstrap Logical, perform the recursive bootstrap bounds test
+#'   (\code{\link{bootstrap_bounds_test}}).
 #' @param n_boot Number of bootstrap replications (default: 1000)
-#' @param seed Random seed for reproducibility
+#' @param seed Random seed, set with \code{set.seed()} at the start (the
+#'   quantile regression standard errors and the bootstrap use random
+#'   numbers).
+#' @param verbose Logical. Print progress messages (default: TRUE).
+#' @param fourier_k Optional Fourier frequency fixed by the user in advance.
+#'   \code{NULL} (default) selects it from \code{1:max_k}; the bootstrap then
+#'   re-selects it in every replication.
+#' @param boot_scheme Bootstrap scheme, \code{"bvz"} (Bertelli, Vacca and
+#'   Zoia 2022, default) or \code{"mcnown"} (the Fov null for all statistics,
+#'   McNown, Sam and Goh 2018, applied to the conditional ECM); see
+#'   \code{\link{bootstrap_bounds_test}}.
+#'
+#' @details
+#' \strong{Inference on cointegration.} The regression always contains
+#' Fourier terms, for which the Pesaran, Shin and Smith (2001) bounds are not
+#' valid. Since 1.1.0 \code{bounds_test} reports the Wald F and t
+#' statistics at each quantile with the PSS bounds labelled as the bounds
+#' for the model without Fourier terms, and gives no analytical verdict.
+#' Use \code{bootstrap = TRUE}: the recursive bootstrap of
+#' \code{\link{bootstrap_bounds_test}} with OLS conditional ECM statistics,
+#' the Fourier frequency (unless \code{fourier_k} is given) and the lag
+#' orders re-selected in every replication (a package choice), and the AND
+#' decision rule. The
+#' quantile-specific statistics have no published null distribution (Cho,
+#' Kim and Shin 2015) and are descriptive.
 #'
 #' @return An object of class "fqardl" containing:
 #' \item{coefficients}{Estimated coefficients for each quantile}
@@ -31,8 +57,24 @@
 #' \item{short_run}{Short-run multipliers}
 #' \item{optimal_k}{Optimal Fourier frequency}
 #' \item{optimal_lags}{Optimal lag structure}
-#' \item{bounds_test}{Results of bounds test for cointegration}
+#' \item{bounds_test}{Wald bounds statistics by quantile (no verdict with
+#'   Fourier terms; see Details)}
+#' \item{bootstrap}{Result of \code{\link{bootstrap_bounds_test}} when
+#'   \code{bootstrap = TRUE}}
 #' \item{diagnostics}{Model diagnostics}
+#'
+#' @references
+#' Pesaran, M.H., Shin, Y. and Smith, R.J. (2001). Bounds testing approaches
+#' to the analysis of level relationships. \emph{Journal of Applied
+#' Econometrics}, 16(3), 289-326. \doi{10.1002/jae.616}
+#'
+#' Cho, J.S., Kim, T. and Shin, Y. (2015). Quantile cointegration in the
+#' autoregressive distributed-lag modeling framework. \emph{Journal of
+#' Econometrics}, 188(1), 281-300. \doi{10.1016/j.jeconom.2015.05.003}
+#'
+#' Bertelli, S., Vacca, G. and Zoia, M. (2022). Bootstrap cointegration tests
+#' in ARDL models. \emph{Economic Modelling}, 116, 105987.
+#' \doi{10.1016/j.econmod.2022.105987}
 #'
 #' @examples
 #' \donttest{
@@ -56,10 +98,16 @@ fqardl <- function(formula, data,
                    bootstrap = FALSE,
                    n_boot = 1000,
                    seed = NULL,
-                   verbose = TRUE) {
+                   verbose = TRUE,
+                   fourier_k = NULL,
+                   boot_scheme = c("bvz", "mcnown")) {
   
   # Validate inputs
   criterion <- match.arg(criterion)
+  boot_scheme <- match.arg(boot_scheme)
+  if (!is.null(fourier_k) &&
+      (length(fourier_k) != 1 || fourier_k < 1 || fourier_k != round(fourier_k)))
+    stop("'fourier_k' must be a single positive integer", call. = FALSE)
   
   if (!inherits(formula, "formula")) {
     stop("'formula' must be a formula object")
@@ -119,9 +167,16 @@ fqardl <- function(formula, data,
   
   # Step 1: Select optimal Fourier frequency
   if (verbose) message("Step 1: Selecting optimal Fourier frequency...")
-  k_results <- select_fourier_frequency(y, X, max_k, criterion)
-  optimal_k <- k_results$optimal_k
-  if (verbose) message(sprintf("   Optimal k = %d (based on %s)\n", optimal_k, criterion))
+  if (is.null(fourier_k)) {
+    k_results <- select_fourier_frequency(y, X, max_k, criterion)
+    optimal_k <- k_results$optimal_k
+    if (verbose) message(sprintf("   Optimal k = %d (based on %s)\n", optimal_k, criterion))
+  } else {
+    k_results <- list(optimal_k = as.integer(fourier_k), ic_values = NA_real_,
+                      criterion = "fixed by the user")
+    optimal_k <- k_results$optimal_k
+    if (verbose) message(sprintf("   k = %d (fixed by the user)\n", optimal_k))
+  }
   
   # Step 2: Generate Fourier terms
   if (verbose) message("Step 2: Generating Fourier terms...")
@@ -162,6 +217,8 @@ fqardl <- function(formula, data,
   # Step 6: Bounds test for cointegration
   if (verbose) message("Step 6: Performing bounds test for cointegration...")
   bounds_results <- perform_bounds_test(qardl_results, n, length(x_names), case)
+  if (!bootstrap && isFALSE(bounds_results$bounds_valid))
+    bounds_results$decision <- paste0(bounds_results$decision, fourier_boot_advice)
   if (verbose) {
     message(sprintf("   F-statistic: %.4f", bounds_results$F_stat))
     message(sprintf("   t-statistic: %.4f", bounds_results$t_stat))
@@ -173,12 +230,17 @@ fqardl <- function(formula, data,
   if (bootstrap) {
     if (verbose) message("Step 7: Bootstrap cointegration testing...")
     bootstrap_results <- bootstrap_bounds_test(
-      y, X, fourier_terms, optimal_p, optimal_q, 
-      tau, case, n_boot, verbose = verbose
+      y, X, fourier_terms, optimal_p, optimal_q,
+      tau, case, n_boot, verbose = verbose,
+      reselect = list(k = fourier_k, max_k = max_k, max_p = max_p,
+                      max_q = max_q, criterion = criterion),
+      scheme = boot_scheme
     )
     if (verbose) {
-      message(sprintf("   Bootstrap p-value (F): %.4f", bootstrap_results$p_value_F))
-      message(sprintf("   Bootstrap p-value (t): %.4f\n", bootstrap_results$p_value_t))
+      message(sprintf("   Bootstrap p-value (Fov): %.4f", bootstrap_results$p_value_F))
+      message(sprintf("   Bootstrap p-value (t): %.4f", bootstrap_results$p_value_t))
+      message(sprintf("   Bootstrap p-value (Find): %.4f", bootstrap_results$p_value_Find))
+      message(sprintf("   Decision: %s\n", bootstrap_results$label))
     }
   }
   
@@ -240,6 +302,13 @@ print.fqardl <- function(x, ...) {
   cat("Bounds Test:\n")
   cat(sprintf("  F-statistic: %.4f\n", x$bounds_test$F_stat))
   cat(sprintf("  Decision: %s\n", x$bounds_test$decision))
+  if (!is.null(x$bootstrap)) {
+    cat("Bootstrap bounds test:\n")
+    cat(sprintf("  p-values: Fov = %.4f, t = %.4f, Find = %.4f\n",
+                x$bootstrap$p_value_F, x$bootstrap$p_value_t,
+                x$bootstrap$p_value_Find))
+    cat(sprintf("  Decision: %s\n", x$bootstrap$label))
+  }
   invisible(x)
 }
 
@@ -284,6 +353,8 @@ summary.fqardl <- function(object, ...) {
   cat("\nCritical Values (Pesaran, Shin and Smith 2001, Table CI(iii)):\n")
   cat(sprintf("   5%%: I(0) = %.3f, I(1) = %.3f\n",
               object$bounds_test$cv_5[1], object$bounds_test$cv_5[2]))
+  if (isFALSE(object$bounds_test$bounds_valid))
+    cat(sprintf("   %s\n", fourier_bounds_note))
   cat("   1% and 10%: not supplied. Only the 5 percent column of the table has\n")
   cat("   been verified against the source; see ?get_pss_critical_values.\n")
   cat(sprintf("\nDecision: %s\n", object$bounds_test$decision))
@@ -294,16 +365,22 @@ summary.fqardl <- function(object, ...) {
     cat("\nBounds test by quantile:\n")
     print(object$bounds_test$summary, row.names = FALSE)
   }
-  cat("\nNote: the PSS critical values were simulated for the conditional mean.\n")
-  cat("Quantile-specific verdicts are descriptive; prefer the bootstrap.\n\n")
+  cat("\nNote: the PSS critical values were simulated for the conditional mean\n")
+  cat("of a model without Fourier terms. The quantile statistics are descriptive\n")
+  cat("(no published null distribution); use bootstrap = TRUE for inference.\n\n")
   
   # Bootstrap results if available
   if (!is.null(object$bootstrap)) {
     cat("BOOTSTRAP COINTEGRATION TEST\n")
     cat("----------------------------\n")
-    cat(sprintf("Number of replications: %d\n", object$bootstrap$n_boot))
-    cat(sprintf("Bootstrap p-value (F): %.4f\n", object$bootstrap$p_value_F))
-    cat(sprintf("Bootstrap p-value (t): %.4f\n\n", object$bootstrap$p_value_t))
+    if (is.null(object$bootstrap$engine)) {
+      cat(sprintf("Number of replications: %d\n", object$bootstrap$n_boot))
+      cat(sprintf("Bootstrap p-value (F): %.4f\n", object$bootstrap$p_value_F))
+      cat(sprintf("Bootstrap p-value (t): %.4f\n", object$bootstrap$p_value_t))
+    } else {
+      .fq_print_boot(object$bootstrap)
+    }
+    cat("\n")
   }
   
   # Diagnostics

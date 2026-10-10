@@ -6,7 +6,26 @@
 \usage{
 perform_mtnardl_bounds(model_result, n, k, case)
 }
+\arguments{
+\item{model_result}{Output of \code{estimate_mtnardl}.}
+
+\item{n}{Sample size.}
+
+\item{k}{Number of level regressors (used when the design does not record
+them).}
+
+\item{case}{Model case; only 3 is supported.}
+}
+\value{
+A list with \code{F_stat}, \code{t_stat}, \code{k}, the 5
+  percent bounds and the F-based \code{decision}.
+}
 \description{
-MTNARDL Bounds Test
+Wald bounds F statistic on the lagged level of y and the lagged levels of
+the regressors, with k equal to the number of level regressors (package
+choice, pending verification against Shin, Yu and Greenwood-Nimmo 2014
+and Pal and Mitra 2016). Corrected in 1.1.0: earlier versions included
+every coefficient whose name ended in \code{_lag1} (also \code{dy_lag1}
+and the lagged differences of the regressors).
 }
 \keyword{internal}

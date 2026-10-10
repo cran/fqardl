@@ -20,9 +20,9 @@ Object of class "fkpss" with test results
 }
 \description{
 Tests for stationarity allowing for smooth structural breaks.
-Implements Becker, Enders & Lee (2006) methodology.
+Implements Becker, Enders and Lee (2006) methodology.
 }
 \references{
-Becker, R., Enders, W., & Lee, J. (2006). A stationarity test in the presence
+Becker, R., Enders, W., and Lee, J. (2006). A stationarity test in the presence
 of an unknown number of smooth breaks. Journal of Time Series Analysis, 27(3), 381-409.
 }
