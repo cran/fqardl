@@ -2,8 +2,8 @@ Package: fqardl
 Type: Package
 Title: Fourier ARDL Methods: Quantile, Nonlinear, Multi-Threshold &
         Unit Root Tests
-Version: 1.1.0
-Date: 2026-10-03
+Version: 1.1.1
+Date: 2026-11-07
 Maintainer: Muhammad Alkhalaf <muhammedalkhalaf@gmail.com>
 Authors@R: c(
     person("Muhammad", "Alkhalaf", 
@@ -39,8 +39,8 @@ Suggests: testthat (>= 3.0.0), knitr, rmarkdown, plotly, covr
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-10-03 16:33:34 UTC; root
+Packaged: 2026-11-09 18:20:52 UTC; root
 Author: Muhammad Alkhalaf [aut, cre, cph] (ORCID:
     <https://orcid.org/0009-0002-2677-9246>)
 Repository: CRAN
-Date/Publication: 2026-10-10 08:00:02 UTC
+Date/Publication: 2026-11-10 07:50:02 UTC

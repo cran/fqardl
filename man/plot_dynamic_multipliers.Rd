@@ -13,7 +13,12 @@ plot_dynamic_multipliers(obj, variable, horizon = 20)
 
 \item{horizon}{Number of periods}
 }
-\description{
-Plot Dynamic Multipliers
+\value{
+A \code{ggplot} object.
 }
-\value{No return value, called for side effects (generates output or plots)}
+\description{
+Cumulative dynamic multipliers m(+)_h and m(-)_h of Shin, Yu and
+Greenwood-Nimmo (2014, eq. 9.13), computed by
+\code{\link{dynamic_multipliers}}, with the long-run multipliers as
+dotted lines.
+}

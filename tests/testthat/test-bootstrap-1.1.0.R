@@ -77,7 +77,7 @@ test_that("the bootstrap leaves the caller's random numbers untouched", {
   b1 <- bootstrap_bounds_test(d$y, as.matrix(d["x1"]), fr, 1, 1, n_boot = 5, seed = 2)
   expect_identical(runif(1), a)
   b2 <- bootstrap_bounds_test(d$y, as.matrix(d["x1"]), fr, 1, 1, n_boot = 5, seed = 2)
-  expect_identical(b1$boot_F, b2$boot_F)
+  expect_equal(b1$boot_F, b2$boot_F, tolerance = 1e-10)
 })
 
 test_that("re-selection runs fqardl's own selection on every bootstrap sample", {

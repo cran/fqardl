@@ -2,18 +2,46 @@
 % Please edit documentation in R/fnardl.R
 \name{test_asymmetry}
 \alias{test_asymmetry}
-\title{Test for Asymmetry (Wald Test)}
+\title{Test for Asymmetry (Wald Tests)}
 \usage{
-test_asymmetry(nardl_result, decompose)
+test_asymmetry(nardl_result, decompose = NULL)
 }
 \arguments{
-\item{nardl_result}{NARDL estimation results}
+\item{nardl_result}{An object returned by \code{fnardl()}, or its element
+\code{nardl_result}.}
 
-\item{decompose}{Decomposed variables}
+\item{decompose}{Names of the decomposed variables. Defaults to those of
+the \code{fnardl()} object.}
 }
 \value{
-List of Wald test results for each variable
+A list with one element per decomposed variable, containing
+  \code{wald_stat}, \code{p_value} and \code{decision} (5 percent level) of
+  the long-run test; \code{lr_positive} and \code{lr_negative} (L(+) and
+  L(-)); \code{difference} (L(+) - L(-)); \code{coef_positive} and
+  \code{coef_negative} (theta(+) and theta(-)); and \code{short_run_pairwise}
+  and \code{short_run_additive}, each a list with \code{wald_stat},
+  \code{df}, \code{p_value} and \code{decision}.
 }
 \description{
-Test for Asymmetry (Wald Test)
+Wald tests of Shin, Yu and Greenwood-Nimmo (2014, sections 9.2.2 and
+9.2.4) for each decomposed variable of the FNARDL model:
+\itemize{
+  \item long-run symmetry, H0: L(+) = L(-), with L(+) = -theta(+)/rho and
+    L(-) = -theta(-)/rho; the variance of L(+) - L(-) is obtained by the
+    delta method; chi-squared with 1 degree of freedom;
+  \item short-run symmetry in the pairwise form, H0: pi(+)_j = pi(-)_j for
+    j = 0, ..., q - 1 (the coefficients of the current and lagged
+    differences of the partial sums); chi-squared with q degrees of
+    freedom;
+  \item short-run symmetry in the additive form, H0: sum_j pi(+)_j =
+    sum_j pi(-)_j; chi-squared with 1 degree of freedom.
+}
+With q = 1 the two short-run forms coincide.
+}
+\references{
+Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling
+  asymmetric cointegration and dynamic multipliers in a nonlinear ARDL
+  framework. In R. C. Sickles and W. C. Horrace (eds), Festschrift in
+  Honor of Peter Schmidt, Springer, pp. 281-314.
+  \doi{10.1007/978-1-4899-8008-3_9}
 }

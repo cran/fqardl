@@ -14,8 +14,13 @@ compute_asymmetric_multipliers(nardl_result, decompose, x_names)
 \item{x_names}{Original variable names}
 }
 \value{
-List with long-run and short-run asymmetric multipliers
+List with \code{long_run_positive}, \code{long_run_negative}
+  (named by the decomposed variables), \code{short_run_positive} and
+  \code{short_run_negative} (the coefficients of the current differences
+  of the partial sums, the impact effects), and \code{ect} (rho).
 }
 \description{
-Compute Asymmetric Multipliers
+Long-run multipliers L(+) = -theta(+)/rho and L(-) = -theta(-)/rho of the
+NARDL error correction model (Shin, Yu and Greenwood-Nimmo 2014, eq. 9.7),
+and the coefficients of the current differences of the partial sums.
 }

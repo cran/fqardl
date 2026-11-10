@@ -94,32 +94,27 @@ plot_asymmetry <- function(obj, variable = NULL) {if (is.null(variable)) {
 
 #' Plot Dynamic Multipliers
 #'
+#' Cumulative dynamic multipliers m(+)_h and m(-)_h of Shin, Yu and
+#' Greenwood-Nimmo (2014, eq. 9.13), computed by
+#' \code{\link{dynamic_multipliers}}, with the long-run multipliers as
+#' dotted lines.
+#'
 #' @param obj FNARDL object
 #' @param variable Variable to plot
 #' @param horizon Number of periods
+#' @return A \code{ggplot} object.
 #'
 #' @export
 plot_dynamic_multipliers <- function(obj, variable, horizon = 20) {
-  # Get coefficients
-  phi <- obj$multipliers$ect
-  
-  lr_pos <- obj$multipliers$long_run_positive[variable]
-  lr_neg <- obj$multipliers$long_run_negative[variable]
-  sr_pos <- obj$multipliers$short_run_positive[variable]
-  sr_neg <- obj$multipliers$short_run_negative[variable]
-  
-  # Compute dynamic multipliers
-  # Using simplified dynamic path: m_h = SR + (LR - SR) * (1 - (1+phi)^h)
-  
-  h <- 0:horizon
-  
-  dm_pos <- sr_pos + (lr_pos - sr_pos) * (1 - (1 + phi)^h)
-  dm_neg <- sr_neg + (lr_neg - sr_neg) * (1 - (1 + phi)^h)
+  dm <- dynamic_multipliers(obj, horizon, variable)[[variable]]
+  if (is.null(dm)) stop("'variable' must be a decomposed variable of the model")
+  lr_pos <- attr(dm, "lr_positive")
+  lr_neg <- attr(dm, "lr_negative")
   
   plot_data <- data.frame(
-    horizon = rep(h, 2),
-    multiplier = c(dm_pos, dm_neg),
-    type = rep(c("Positive shock", "Negative shock"), each = length(h))
+    horizon = rep(dm$h, 2),
+    multiplier = c(dm$m_positive, dm$m_negative),
+    type = rep(c("Positive change", "Negative change"), each = nrow(dm))
   )
   
   p <- ggplot(plot_data, aes(x = horizon, y = multiplier, color = type)) +
@@ -128,13 +123,13 @@ plot_dynamic_multipliers <- function(obj, variable, horizon = 20) {
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
     geom_hline(yintercept = lr_pos, linetype = "dotted", color = "#2166AC", alpha = 0.7) +
     geom_hline(yintercept = lr_neg, linetype = "dotted", color = "#B2182B", alpha = 0.7) +
-    scale_color_manual(values = c("Positive shock" = "#2166AC", "Negative shock" = "#B2182B")) +
+    scale_color_manual(values = c("Positive change" = "#2166AC", "Negative change" = "#B2182B")) +
     labs(
-      title = paste("Dynamic Multipliers:", variable),
-      subtitle = "Response to Unit Positive and Negative Shocks",
+      title = paste("Cumulative Dynamic Multipliers:", variable),
+      subtitle = "m(+) and m(-): unit change in the positive and negative partial sums",
       x = "Horizon (Periods)",
       y = "Multiplier",
-      color = "Shock Type"
+      color = ""
     ) +
     theme_minimal() +
     theme(legend.position = "bottom")
@@ -143,51 +138,38 @@ plot_dynamic_multipliers <- function(obj, variable, horizon = 20) {
 }
 
 
-#' Plot Cumulative Multipliers
+#' Plot Cumulative Multipliers and Asymmetry
+#'
+#' Cumulative dynamic multipliers m(+)_h and m(-)_h of Shin, Yu and
+#' Greenwood-Nimmo (2014, eq. 9.13) and their difference m(+)_h - m(-)_h.
 #'
 #' @param obj FNARDL object
 #' @param variable Variable to plot
 #' @param horizon Number of periods
+#' @return A \code{ggplot} object.
 #'
 #' @export
 plot_cumulative_multipliers <- function(obj, variable, horizon = 20) {
-  phi <- obj$multipliers$ect
-  
-  lr_pos <- obj$multipliers$long_run_positive[variable]
-  lr_neg <- obj$multipliers$long_run_negative[variable]
-  sr_pos <- obj$multipliers$short_run_positive[variable]
-  sr_neg <- obj$multipliers$short_run_negative[variable]
-  
-  h <- 0:horizon
-  
-  # Dynamic multipliers
-  dm_pos <- sr_pos + (lr_pos - sr_pos) * (1 - (1 + phi)^h)
-  dm_neg <- sr_neg + (lr_neg - sr_neg) * (1 - (1 + phi)^h)
-  
-  # Cumulative (sum of dynamic)
-  cm_pos <- cumsum(dm_pos)
-  cm_neg <- cumsum(dm_neg)
-  
-  # Asymmetry (difference)
-  asym <- cm_pos - cm_neg
+  dm <- dynamic_multipliers(obj, horizon, variable)[[variable]]
+  if (is.null(dm)) stop("'variable' must be a decomposed variable of the model")
   
   plot_data <- data.frame(
-    horizon = rep(h, 3),
-    value = c(cm_pos, cm_neg, asym),
-    type = rep(c("Cumulative (+)", "Cumulative (-)", "Asymmetry"), each = length(h))
+    horizon = rep(dm$h, 3),
+    value = c(dm$m_positive, dm$m_negative, dm$asymmetry),
+    type = rep(c("m(+)", "m(-)", "Asymmetry"), each = nrow(dm))
   )
   
   p <- ggplot(plot_data, aes(x = horizon, y = value, color = type)) +
     geom_line(linewidth = 1.2) +
     geom_hline(yintercept = 0, linetype = "dashed") +
     scale_color_manual(values = c(
-      "Cumulative (+)" = "#2166AC",
-      "Cumulative (-)" = "#B2182B",
+      "m(+)" = "#2166AC",
+      "m(-)" = "#B2182B",
       "Asymmetry" = "#1B7837"
     )) +
     labs(
       title = paste("Cumulative Dynamic Multipliers:", variable),
-      subtitle = "Cumulative Response and Asymmetry Over Time",
+      subtitle = "m(+), m(-) and the asymmetry m(+) - m(-)",
       x = "Horizon",
       y = "Cumulative Multiplier",
       color = ""

@@ -470,47 +470,54 @@ build_nardl_design <- function(y, X, fourier, p, q) {
 
 #' Compute Asymmetric Multipliers
 #'
+#' Long-run multipliers L(+) = -theta(+)/rho and L(-) = -theta(-)/rho of the
+#' NARDL error correction model (Shin, Yu and Greenwood-Nimmo 2014, eq. 9.7),
+#' and the coefficients of the current differences of the partial sums.
+#'
 #' @param nardl_result NARDL estimation results
 #' @param decompose Decomposed variable names
 #' @param x_names Original variable names
 #'
-#' @return List with long-run and short-run asymmetric multipliers
+#' @return List with \code{long_run_positive}, \code{long_run_negative}
+#'   (named by the decomposed variables), \code{short_run_positive} and
+#'   \code{short_run_negative} (the coefficients of the current differences
+#'   of the partial sums, the impact effects), and \code{ect} (rho).
 #'
 #' @export
 compute_asymmetric_multipliers <- function(nardl_result, decompose, x_names) {
-  
+
   coefs <- nardl_result$coefficients
-  phi <- coefs["y_lag1"]  # Speed of adjustment
-  
+  phi <- unname(coefs["y_lag1"])  # Speed of adjustment
+
   long_run_pos <- list()
   long_run_neg <- list()
   short_run_pos <- list()
   short_run_neg <- list()
-  
+
   for (var in decompose) {
-    # Long-run multipliers: -beta / phi
+    # Long-run multipliers: -theta / rho
     pos_lag_name <- paste0(var, "_pos_lag1")
     neg_lag_name <- paste0(var, "_neg_lag1")
-    
+
     if (pos_lag_name %in% names(coefs)) {
-      long_run_pos[[var]] <- -coefs[pos_lag_name] / phi
+      long_run_pos[[var]] <- unname(-coefs[pos_lag_name] / phi)
     }
     if (neg_lag_name %in% names(coefs)) {
-      long_run_neg[[var]] <- -coefs[neg_lag_name] / phi
+      long_run_neg[[var]] <- unname(-coefs[neg_lag_name] / phi)
     }
-    
-    # Short-run multipliers
+
+    # Impact effects: coefficients of the current differences
     pos_diff_name <- paste0("d_", var, "_pos")
     neg_diff_name <- paste0("d_", var, "_neg")
-    
+
     if (pos_diff_name %in% names(coefs)) {
-      short_run_pos[[var]] <- coefs[pos_diff_name]
+      short_run_pos[[var]] <- unname(coefs[pos_diff_name])
     }
     if (neg_diff_name %in% names(coefs)) {
-      short_run_neg[[var]] <- coefs[neg_diff_name]
+      short_run_neg[[var]] <- unname(coefs[neg_diff_name])
     }
   }
-  
+
   return(list(
     long_run_positive = unlist(long_run_pos),
     long_run_negative = unlist(long_run_neg),
@@ -521,56 +528,212 @@ compute_asymmetric_multipliers <- function(nardl_result, decompose, x_names) {
 }
 
 
-#' Test for Asymmetry (Wald Test)
+# Coefficients of the current and lagged differences of a partial sum, in
+# lag order 0, 1, ..., q - 1.
+.fn_diff_names <- function(coef_names, var, sign) {
+  base <- paste0("d_", var, "_", sign)
+  lags <- grep(paste0("^", base, "_lag[0-9]+$"), coef_names, value = TRUE)
+  lags <- lags[order(as.integer(sub(".*_lag", "", lags)))]
+  c(base[base %in% coef_names], lags)
+}
+
+.fn_wald <- function(b, V, R) {
+  r <- R %*% b
+  W <- as.numeric(t(r) %*% solve(R %*% V %*% t(R), r))
+  list(wald_stat = W, df = nrow(R),
+       p_value = stats::pchisq(W, df = nrow(R), lower.tail = FALSE))
+}
+
+.fn_unwrap <- function(nardl_result, decompose) {
+  if (inherits(nardl_result, "fnardl") ||
+      (!is.null(nardl_result$nardl_result) && is.null(nardl_result$model))) {
+    if (is.null(decompose)) decompose <- nardl_result$decompose
+    nardl_result <- nardl_result$nardl_result
+  }
+  if (is.null(nardl_result$model) || is.null(nardl_result$coefficients))
+    stop("'nardl_result' must be an object returned by fnardl() or its element 'nardl_result'")
+  if (is.null(decompose) || !length(decompose))
+    stop("'decompose' must name the decomposed variables")
+  list(nardl_result = nardl_result, decompose = decompose)
+}
+
+
+#' Test for Asymmetry (Wald Tests)
 #'
-#' @param nardl_result NARDL estimation results
-#' @param decompose Decomposed variables
+#' Wald tests of Shin, Yu and Greenwood-Nimmo (2014, sections 9.2.2 and
+#' 9.2.4) for each decomposed variable of the FNARDL model:
+#' \itemize{
+#'   \item long-run symmetry, H0: L(+) = L(-), with L(+) = -theta(+)/rho and
+#'     L(-) = -theta(-)/rho; the variance of L(+) - L(-) is obtained by the
+#'     delta method; chi-squared with 1 degree of freedom;
+#'   \item short-run symmetry in the pairwise form, H0: pi(+)_j = pi(-)_j for
+#'     j = 0, ..., q - 1 (the coefficients of the current and lagged
+#'     differences of the partial sums); chi-squared with q degrees of
+#'     freedom;
+#'   \item short-run symmetry in the additive form, H0: sum_j pi(+)_j =
+#'     sum_j pi(-)_j; chi-squared with 1 degree of freedom.
+#' }
+#' With q = 1 the two short-run forms coincide.
 #'
-#' @return List of Wald test results for each variable
+#' @param nardl_result An object returned by \code{fnardl()}, or its element
+#'   \code{nardl_result}.
+#' @param decompose Names of the decomposed variables. Defaults to those of
+#'   the \code{fnardl()} object.
+#'
+#' @return A list with one element per decomposed variable, containing
+#'   \code{wald_stat}, \code{p_value} and \code{decision} (5 percent level) of
+#'   the long-run test; \code{lr_positive} and \code{lr_negative} (L(+) and
+#'   L(-)); \code{difference} (L(+) - L(-)); \code{coef_positive} and
+#'   \code{coef_negative} (theta(+) and theta(-)); and \code{short_run_pairwise}
+#'   and \code{short_run_additive}, each a list with \code{wald_stat},
+#'   \code{df}, \code{p_value} and \code{decision}.
+#'
+#' @references Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014). Modelling
+#'   asymmetric cointegration and dynamic multipliers in a nonlinear ARDL
+#'   framework. In R. C. Sickles and W. C. Horrace (eds), Festschrift in
+#'   Honor of Peter Schmidt, Springer, pp. 281-314.
+#'   \doi{10.1007/978-1-4899-8008-3_9}
 #'
 #' @export
-test_asymmetry <- function(nardl_result, decompose) {
-  
+test_asymmetry <- function(nardl_result, decompose = NULL) {
+  u <- .fn_unwrap(nardl_result, decompose)
+  nardl_result <- u$nardl_result
+  decompose <- u$decompose
+
   coefs <- nardl_result$coefficients
-  vcov_mat <- vcov(nardl_result$model)
-  
+  V <- stats::vcov(nardl_result$model)
+  nms <- names(coefs)
+  dec <- function(p) if (p < 0.05) "Asymmetric" else "Symmetric"
+
   results <- list()
-  
+
   for (var in decompose) {
-    # Long-run asymmetry test: H0: L+ = L-
     pos_name <- paste0(var, "_pos_lag1")
     neg_name <- paste0(var, "_neg_lag1")
-    
-    if (pos_name %in% names(coefs) && neg_name %in% names(coefs)) {
-      # Find indices
-      idx_pos <- which(names(coefs) == pos_name)
-      idx_neg <- which(names(coefs) == neg_name)
-      
-      # Coefficient difference
-      diff_coef <- coefs[idx_pos] - coefs[idx_neg]
-      
-      # Variance of difference
-      var_diff <- vcov_mat[idx_pos, idx_pos] + vcov_mat[idx_neg, idx_neg] - 
-                  2 * vcov_mat[idx_pos, idx_neg]
-      
-      # Wald statistic
-      wald_stat <- (diff_coef^2) / var_diff
-      p_value <- 1 - pchisq(wald_stat, df = 1)
-      
-      results[[var]] <- list(
-        wald_stat = as.numeric(wald_stat),
-        p_value = as.numeric(p_value),
-        coef_positive = coefs[idx_pos],
-        coef_negative = coefs[idx_neg],
-        difference = as.numeric(diff_coef),
-        decision = if (p_value < 0.05) "Asymmetric" else "Symmetric"
-      )
+    if (!(pos_name %in% nms && neg_name %in% nms)) next
+
+    # Long-run symmetry, H0: -theta(+)/rho = -theta(-)/rho (delta method)
+    rho <- unname(coefs["y_lag1"])
+    th_p <- unname(coefs[pos_name])
+    th_n <- unname(coefs[neg_name])
+    lr_p <- -th_p / rho
+    lr_n <- -th_n / rho
+    g <- stats::setNames(numeric(length(coefs)), nms)
+    g[pos_name] <- -1 / rho
+    g[neg_name] <- 1 / rho
+    g["y_lag1"] <- (th_p - th_n) / rho^2
+    W_lr <- (lr_p - lr_n)^2 / as.numeric(t(g) %*% V %*% g)
+    p_lr <- stats::pchisq(W_lr, df = 1, lower.tail = FALSE)
+
+    # Short-run symmetry
+    dp <- .fn_diff_names(nms, var, "pos")
+    dn <- .fn_diff_names(nms, var, "neg")
+    sr_pair <- sr_add <- NULL
+    if (length(dp) && length(dp) == length(dn)) {
+      R <- matrix(0, length(dp), length(coefs), dimnames = list(NULL, nms))
+      for (j in seq_along(dp)) { R[j, dp[j]] <- 1; R[j, dn[j]] <- -1 }
+      sr_pair <- .fn_wald(coefs, V, R)
+      sr_pair$decision <- dec(sr_pair$p_value)
+      R1 <- matrix(colSums(R), 1, dimnames = list(NULL, nms))
+      sr_add <- .fn_wald(coefs, V, R1)
+      sr_add$sum_positive <- sum(coefs[dp])
+      sr_add$sum_negative <- sum(coefs[dn])
+      sr_add$decision <- dec(sr_add$p_value)
     }
+
+    results[[var]] <- list(
+      wald_stat = W_lr,
+      p_value = p_lr,
+      lr_positive = lr_p,
+      lr_negative = lr_n,
+      difference = lr_p - lr_n,
+      coef_positive = th_p,
+      coef_negative = th_n,
+      decision = dec(p_lr),
+      short_run_pairwise = sr_pair,
+      short_run_additive = sr_add
+    )
   }
-  
+
   return(results)
 }
 
+
+#' Cumulative Dynamic Multipliers
+#'
+#' Cumulative dynamic multipliers of Shin, Yu and Greenwood-Nimmo (2014,
+#' eq. 9.13), m(+)_h and m(-)_h, h = 0, 1, ..., horizon: the effect on y at
+#' t + h of a unit change in the positive (negative) partial sum at t. They
+#' are computed from the estimated error correction model (current and lagged
+#' differences of y and of the partial sums, lagged levels), which is
+#' equivalent to the recursion of footnote 12 of the paper, and tend to the
+#' long-run multipliers L(+) and L(-) as h grows when the model is dynamically
+#' stable. The
+#' intercept and the Fourier terms do not enter the multipliers.
+#'
+#' A unit change in the negative partial sum is a unit change in x through
+#' a negative change; the response of y to a fall of x by one unit is
+#' \code{-m_negative}.
+#'
+#' @param object An object returned by \code{fnardl()}, or its element
+#'   \code{nardl_result}.
+#' @param horizon Largest horizon h.
+#' @param decompose Names of the decomposed variables. Defaults to those of
+#'   the \code{fnardl()} object.
+#'
+#' @return A list with one data frame per decomposed variable, with columns
+#'   \code{h}, \code{m_positive}, \code{m_negative} and \code{asymmetry}
+#'   (\code{m_positive - m_negative}), and the attributes
+#'   \code{lr_positive} and \code{lr_negative}.
+#'
+#' @references Shin, Y., Yu, B. and Greenwood-Nimmo, M. (2014).
+#'   \doi{10.1007/978-1-4899-8008-3_9}
+#'
+#' @export
+dynamic_multipliers <- function(object, horizon = 20, decompose = NULL) {
+  u <- .fn_unwrap(object, decompose)
+  coefs <- u$nardl_result$coefficients
+  nms <- names(coefs)
+  if (!is.numeric(horizon) || length(horizon) != 1 || horizon < 0 ||
+      horizon != round(horizon))
+    stop("'horizon' must be a non-negative integer")
+
+  rho <- unname(coefs["y_lag1"])
+  gl <- grep("^dy_lag[0-9]+$", nms, value = TRUE)
+  gl <- gl[order(as.integer(sub("dy_lag", "", gl)))]
+  gam <- unname(coefs[gl])
+
+  path <- function(theta, pi) {
+    H <- horizon
+    pad <- max(length(gam), length(pi)) + 1
+    TT <- pad + H + 1
+    x <- c(rep(0, pad), rep(1, H + 1))
+    y <- dy <- numeric(TT)
+    dx <- c(0, diff(x))
+    for (t in (pad + 1):TT) {
+      s <- rho * y[t - 1] + theta * x[t - 1]
+      for (j in seq_along(gam)) s <- s + gam[j] * dy[t - j]
+      for (j in seq_along(pi)) s <- s + pi[j] * dx[t - j + 1]
+      dy[t] <- s
+      y[t] <- y[t - 1] + s
+    }
+    y[(pad + 1):TT]
+  }
+
+  out <- list()
+  for (var in u$decompose) {
+    pn <- paste0(var, "_pos_lag1"); nn <- paste0(var, "_neg_lag1")
+    if (!(pn %in% nms && nn %in% nms)) next
+    mp <- path(unname(coefs[pn]), unname(coefs[.fn_diff_names(nms, var, "pos")]))
+    mn <- path(unname(coefs[nn]), unname(coefs[.fn_diff_names(nms, var, "neg")]))
+    df <- data.frame(h = 0:horizon, m_positive = mp, m_negative = mn,
+                     asymmetry = mp - mn)
+    attr(df, "lr_positive") <- unname(-coefs[pn] / rho)
+    attr(df, "lr_negative") <- unname(-coefs[nn] / rho)
+    out[[var]] <- df
+  }
+  out
+}
 
 #' NARDL Bounds Test
 #'
@@ -734,7 +897,7 @@ print.fnardl <- function(x, ...) {
   cat(sprintf("Decomposed variables: %s\n", paste(x$decompose, collapse = ", ")))
   cat(sprintf("Fourier frequency: k = %d\n", x$optimal_k))
   cat(sprintf("Lags: p = %d, q = %d\n", x$optimal_p, x$optimal_q))
-  cat("\nAsymmetry Tests:\n")
+  cat("\nLong-run asymmetry tests:\n")
   for (var in x$decompose) {
     cat(sprintf("  %s: %s (p = %.4f)\n", 
                 var, 
@@ -766,18 +929,22 @@ summary.fnardl <- function(object, ...) {
   cat("ASYMMETRIC LONG-RUN MULTIPLIERS\n")
   cat("-------------------------------\n")
   for (var in object$decompose) {
-    # FIXED in 1.1.0 (printout only): the elements are named
-    # "<var>.<var>_pos_lag1" by unlist(), so indexing by <var> printed NA.
     lrp <- object$multipliers$long_run_positive
     lrn <- object$multipliers$long_run_negative
-    cat(sprintf("%s(+): %.4f\n", var,
-                unname(lrp[paste0(var, ".", var, "_pos_lag1")])))
-    cat(sprintf("%s(-): %.4f\n", var,
-                unname(lrn[paste0(var, ".", var, "_neg_lag1")])))
-    cat(sprintf("  Asymmetry test: Wald = %.3f, p = %.4f (%s)\n\n",
-                object$asymmetry_tests[[var]]$wald_stat,
-                object$asymmetry_tests[[var]]$p_value,
-                object$asymmetry_tests[[var]]$decision))
+    cat(sprintf("%s(+): %.4f\n", var, unname(lrp[var])))
+    cat(sprintf("%s(-): %.4f\n", var, unname(lrn[var])))
+    at <- object$asymmetry_tests[[var]]
+    cat(sprintf("  Long-run symmetry: Wald = %.3f, p = %.4f (%s)\n",
+                at$wald_stat, at$p_value, at$decision))
+    if (!is.null(at$short_run_additive))
+      cat(sprintf("  Short-run symmetry (additive): Wald = %.3f, p = %.4f (%s)\n",
+                  at$short_run_additive$wald_stat, at$short_run_additive$p_value,
+                  at$short_run_additive$decision))
+    if (!is.null(at$short_run_pairwise) && at$short_run_pairwise$df > 1)
+      cat(sprintf("  Short-run symmetry (pairwise, df = %d): Wald = %.3f, p = %.4f (%s)\n",
+                  at$short_run_pairwise$df, at$short_run_pairwise$wald_stat,
+                  at$short_run_pairwise$p_value, at$short_run_pairwise$decision))
+    cat("\n")
   }
   
   cat("BOUNDS TEST\n")

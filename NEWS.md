@@ -1,3 +1,13 @@
+# fqardl 1.1.1
+
+* `test_asymmetry()` accepts the object returned by `fnardl()` as well as its element `nardl_result`; `decompose` defaults to the decomposed variables of the `fnardl()` object. Other inputs give an error.
+* `test_asymmetry()`: the long-run test is the Wald test of H0: L(+) = L(-), with L = -theta/rho and the delta-method variance (Shin, Yu and Greenwood-Nimmo 2014, section 9.2.2); up to 1.1.0 it was the Wald test of theta(+) = theta(-). The hypothesis is the same; the statistic and p-value change. `difference` is now L(+) - L(-). New elements: `lr_positive`, `lr_negative`, `short_run_pairwise` (H0: pi(+)_j = pi(-)_j, j = 0, ..., q - 1) and `short_run_additive` (H0: the sums of the pi(+)_j and of the pi(-)_j are equal), each with `wald_stat`, `df`, `p_value` and `decision`.
+* New function `dynamic_multipliers()`: cumulative dynamic multipliers m(+)_h and m(-)_h and their difference (Shin, Yu and Greenwood-Nimmo 2014, eq. 9.13).
+* `plot_dynamic_multipliers()`, `plot_cumulative_multipliers()` and `plot(<fnardl>, type = "dynamic" | "cumulative")` plot the multipliers of `dynamic_multipliers()`. Up to 1.1.0 they plotted `SR + (LR - SR) * (1 - (1 + rho)^h)` and its cumulative sum, and gave NA values.
+* `compute_asymmetric_multipliers()`: `long_run_positive`, `long_run_negative`, `short_run_positive` and `short_run_negative` are named by the decomposed variable (`"x"`), not `"x.x_pos_lag1"`; `ect` is unnamed. `plot(<fnardl>, type = "asymmetry" | "comparison")` use these names.
+* `summary()` of `fnardl` objects prints the short-run symmetry tests.
+* Man pages and tests updated (tests/testthat/test-nardl-paper-1.1.1.R). The test that two bootstrap runs with the same seed give the same statistics compares them with a tolerance of 1e-10 instead of exact equality.
+
 # fqardl 1.1.0
 
 ## Breaking changes

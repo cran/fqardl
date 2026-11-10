@@ -94,3 +94,18 @@ test_that("test_asymmetry returns valid results", {
   expect_true(!is.null(asym_test$x$p_value))
   expect_true(asym_test$x$p_value >= 0 && asym_test$x$p_value <= 1)
 })
+
+test_that("test_asymmetry accepts the fnardl object and its nardl_result", {
+  skip_on_cran()
+  set.seed(789)
+  n <- 100
+  data <- data.frame(y = cumsum(rnorm(n)), x = cumsum(rnorm(n)))
+  invisible(capture.output(f <- fnardl(y ~ x, data = data, decompose = "x")))
+  a1 <- test_asymmetry(f)
+  a2 <- test_asymmetry(f, "x")
+  a3 <- test_asymmetry(f, decompose = "x")
+  a4 <- test_asymmetry(f$nardl_result, "x")
+  expect_equal(a1, a4); expect_equal(a2, a4); expect_equal(a3, a4)
+  expect_equal(a1$x$wald_stat, f$asymmetry_tests$x$wald_stat)
+  expect_error(test_asymmetry(list(a = 1), "x"), "fnardl")
+})

@@ -2,7 +2,7 @@
 % Please edit documentation in R/plots_nardl.R
 \name{plot_cumulative_multipliers}
 \alias{plot_cumulative_multipliers}
-\title{Plot Cumulative Multipliers}
+\title{Plot Cumulative Multipliers and Asymmetry}
 \usage{
 plot_cumulative_multipliers(obj, variable, horizon = 20)
 }
@@ -13,7 +13,10 @@ plot_cumulative_multipliers(obj, variable, horizon = 20)
 
 \item{horizon}{Number of periods}
 }
-\description{
-Plot Cumulative Multipliers
+\value{
+A \code{ggplot} object.
 }
-\value{No return value, called for side effects (generates output or plots)}
+\description{
+Cumulative dynamic multipliers m(+)_h and m(-)_h of Shin, Yu and
+Greenwood-Nimmo (2014, eq. 9.13) and their difference m(+)_h - m(-)_h.
+}
